@@ -3,6 +3,7 @@ streamlit>=1.25.0
 pandas
 numpy
 requests
+python-dotenv
 
 # Text processing
 fuzzywuzzy>=0.18.0
@@ -14,6 +15,8 @@ plotly
 # Optional AI packages - อาจติดตั้งไม่ได้แต่แอปจะทำงาน
 scikit-learn
 sentence-transformers
+transformers
+accelerate
 
 # PyTorch CPU - สำหรับ AI features
 torch

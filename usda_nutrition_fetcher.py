@@ -15,6 +15,13 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import csv
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# โหลดค่าจากไฟล์ .env
+load_dotenv()
+
+# เรียกใช้ API key
+usda_api_key = os.getenv("USDA_API_KEY")
 
 class USDANutritionFetcher:
     """คลาสสำหรับดึงข้อมูลโภชนาการจาก USDA API"""
@@ -26,7 +33,7 @@ class USDANutritionFetcher:
         Args:
             api_key (str): USDA API Key (ใช้ DEMO_KEY ถ้าไม่มี)
         """
-        self.api_key = api_key
+        self.api_key = usda_api_key
         self.base_url = "https://api.nal.usda.gov/fdc/v1"
         self.rate_limit_delay = 1.0  # วินาทีระหว่างการเรียก API
         
@@ -332,12 +339,12 @@ class USDANutritionFetcher:
         try:
             df = pd.read_csv(recipes_file)
             
-            if 'text_ingradiant' not in df.columns:
-                raise ValueError("ไม่พบคอลัมน์ 'text_ingradiant' ในไฟล์")
+            if 'ingredient' not in df.columns:
+                raise ValueError("ไม่พบคอลัมน์ 'ingredient' ในไฟล์")
             
             all_ingredients = set()
             
-            for ingredients_text in df['text_ingradiant'].dropna():
+            for ingredients_text in df['ingredient'].dropna():
                 # แยกแต่ละบรรทัดของวัตถุดิบ
                 for line in str(ingredients_text).split('\n'):
                     ingredient = line.strip()

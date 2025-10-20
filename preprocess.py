@@ -109,6 +109,96 @@ def standardize_ingredient_amounts(text: str) -> str:
     
     return processed_text
 
+
+def _parse_fraction(qty_str: str) -> float:
+    """Parse simple fractions like '1/2' or decimal strings."""
+    from fractions import Fraction
+    qty_str = qty_str.strip()
+    if '/' in qty_str:
+        try:
+            return float(Fraction(qty_str))
+        except Exception:
+            return 0.0
+    try:
+        return float(qty_str)
+    except Exception:
+        return 0.0
+
+
+# Mapping units to grams (approximate for household measures)
+UNIT_TO_GRAMS = {
+    'กิโลกรัม': 1000.0,
+    'กรัม': 1.0,
+    'ช้อนโต๊ะ': 15.0,
+    'ช้อนชา': 5.0,
+    'ถ้วยตวง': 200.0,
+    'ถ้วย': 200.0,
+    'ลูก': 50.0,
+    'หัว': 80.0,
+    'กิ่ง': 10.0,
+    'ฝัก': 10.0,
+    'ใบ': 5.0,
+    'ดอก': 10.0,
+    'แผ่น': 5.0,
+    'เส้น': 5.0
+}
+
+
+def convert_ingredient_line_to_grams(line: str, default_grams: float = 20.0) -> str:
+    """Convert a single ingredient line to a grams-normalized line.
+
+    Returns a string like '- 50 กรัม กุ้งสด' or leaves the ingredient with an estimated grams
+    if no numeric quantity was present.
+    """
+    if not isinstance(line, str) or not line.strip():
+        return line
+
+    original = line.strip()
+    # remove leading bullets
+    clean = re.sub(r'^[-•*\s]+', '', original)
+
+    # look for a numeric quantity (including fractions)
+    # e.g., '1/2', '2.5', '3'
+    qty_match = re.search(r'(?P<qty>\d+\s*/\s*\d+|\d+\.\d+|\d+)', clean)
+    unit_match = None
+    if qty_match:
+        qty_str = qty_match.group('qty')
+        qty = _parse_fraction(qty_str.replace(' ', ''))
+        # after qty, try to find a unit word
+        after = clean[qty_match.end():]
+        unit_search = re.search(r'\b(กิโลกรัม|กรัม|ช้อนโต๊ะ|ช้อนชา|ถ้วยตวง|ถ้วย|ลูก|หัว|กิ่ง|ฝัก|ใบ|ดอก|แผ่น|เส้น)\b', after)
+        if unit_search:
+            unit = unit_search.group(1)
+            grams = qty * UNIT_TO_GRAMS.get(unit, 1.0)
+            # remove the matched qty+unit from text
+            rest = (clean[:qty_match.start()] + clean[qty_match.end():]).strip()
+            rest = re.sub(r'\b' + re.escape(unit) + r'\b', '', rest).strip()
+            return f"- {int(round(grams))} กรัม {rest}".strip()
+        else:
+            # numeric present but no unit: assume grams
+            grams = qty
+            rest = (clean[:qty_match.start()] + clean[qty_match.end():]).strip()
+            return f"- {int(round(grams))} กรัม {rest}".strip()
+    else:
+        # No numeric qty found; look for unit words only
+        unit_only = re.search(r'\b(กิโลกรัม|กรัม|ช้อนโต๊ะ|ช้อนชา|ถ้วยตวง|ถ้วย|ลูก|หัว|กิ่ง|ฝัก|ใบ|ดอก|แผ่น|เส้น)\b', clean)
+        if unit_only:
+            unit = unit_only.group(1)
+            grams = UNIT_TO_GRAMS.get(unit, default_grams)
+            rest = re.sub(r'\b' + re.escape(unit) + r'\b', '', clean).strip()
+            return f"- {int(round(grams))} กรัม {rest}".strip()
+        # fallback: no qty or unit -> estimate small amount
+        return f"- {int(round(default_grams))} กรัม {clean}".strip()
+
+
+def convert_ingredient_block_to_grams(block: str) -> str:
+    """Convert a block of ingredient lines (separated by newline) to grams-normalized lines."""
+    if not isinstance(block, str):
+        return block
+    lines = [ln for ln in block.split('\n') if ln.strip()]
+    converted = [convert_ingredient_line_to_grams(ln) for ln in lines]
+    return '\n'.join(converted)
+
 def extract_cooking_methods(text: str) -> List[str]:
     """
     สกัดวิธีการทำอาหารจากข้อความ
@@ -218,6 +308,24 @@ def enhance_recipe_data(df: pd.DataFrame) -> pd.DataFrame:
             return 'อื่นๆ'
     
     df['category'] = df['name'].apply(categorize_food)
+    
+    # แปลงหน่วยวัตถุดิบทั้งหมดเป็นกรัม (ทดลองด้วยการประมาณ)
+    df['text_ingradiant_grams'] = df['text_ingradiant'].apply(convert_ingredient_block_to_grams)
+
+    # เพิ่มคอลัมน์ dish_type: 'จานเดียว' หรือ 'กับข้าว'
+    def detect_dish_type(name, methods, category):
+        name_l = name.lower()
+        # heuristic rules
+        if any(word in name_l for word in ['ข้าว', 'ก๋วยเตี๋ยว', 'ราเมง', 'ผัดไท', 'กระเพรา']):
+            return 'จานเดียว'
+        if category in ['แกงและซุป', 'อาหารผัด', 'อาหารทอด', 'ยำและตำ', 'อาหารหลัก']:
+            return 'กับข้าว'
+        # method-based heuristics
+        if 'ต้ม' in methods or 'แกง' in methods:
+            return 'กับข้าว'
+        return 'จานเดียว'
+
+    df['dish_type'] = df.apply(lambda r: detect_dish_type(r['name'], r.get('cooking_methods_str', ''), r.get('category', '')), axis=1)
     
     return df
 

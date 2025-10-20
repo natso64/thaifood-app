@@ -32,7 +32,7 @@ def load_model():
         return None
     if os.path.exists(MODEL_PATH):
         return SentenceTransformer(MODEL_PATH)
-    with st.spinner("กำลังดาวน์โหลดโมเดล AI... (ใช้เวลาประมาณ 2-3 นาที)"):
+    with st.spinner("กำลังดาวน์โหลดโมเดล ... (ใช้เวลาประมาณ 2-3 นาที)"):
         model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         os.makedirs(MODEL_PATH, exist_ok=True)
         model.save(MODEL_PATH)
@@ -87,7 +87,7 @@ def get_ingredient_embeddings(_model, data):
         embeddings = _model.encode(texts)
     
     try:
-        with open(embeddings_path, 'wb') as f:
+        with open(EMBEDDINGS_INGREDIENT_PATH, 'wb') as f:
             pickle.dump(embeddings, f)
     except Exception:
         pass
@@ -137,53 +137,57 @@ def simple_cosine_similarity(query_vec, embeddings):
             similarities.append(similarity)
     return np.array(similarities)
 
-def search_recipes(query: str, model, data, embeddings, ingredient_embeddings=None, top_k: int = 5, search_mode: str = 'combined'):
+def search_recipes(query: str, model, data, embeddings, ingredient_embeddings, top_k: int = 5, search_mode: str = 'อัตโนมัติ', min_similarity: float = None):
     """
     search_mode options:
-    - 'combined': ค้นหาจากทั้งชื่อ วัตถุดิบ และวิธีทำ (default)
-    - 'ingredient': ค้นหาเฉพาะจากวัตถุดิบ
-    - 'name': ค้นหาเฉพาะจากชื่อเมนู
+    - 'อัตโนมัติ': ใช้ AI search และถ้าผลลัพธ์ไม่ดีจะใช้ Fuzzy search เสริม (default)
+    - 'AI Search เท่านั้น': ใช้ AI-based semantic search เท่านั้น
+    - 'Fuzzy Search เท่านั้น': ใช้ Fuzzy string matching เท่านั้น
     """
     if data.empty:
         return []
-    
+
     results = []
     
-    # เลือก embeddings ตาม search_mode
-    if search_mode == 'ingredient' and ingredient_embeddings is not None:
-        selected_embeddings = ingredient_embeddings
-    else:
-        selected_embeddings = embeddings
-    
-    # Semantic search
-    if model is not None and SENTENCE_TRANSFORMERS_AVAILABLE and len(selected_embeddings) > 0:
-        query_embedding = model.encode([query])
-        
-        if SKLEARN_AVAILABLE:
-            similarities = cosine_similarity(query_embedding, selected_embeddings)[0]
-        else:
-            similarities = simple_cosine_similarity(query_embedding[0], selected_embeddings)
-        
-        # ปรับ threshold ตาม search_mode
-        threshold = 0.25 if search_mode == 'ingredient' else 0.3
-        
-        top_indices = np.argsort(-similarities)[:top_k * 2]  # เอาเผื่อกรอง
-        
-        for idx in top_indices:
-            if idx < len(data) and similarities[idx] >= threshold:
-                results.append({
-                    'name': data.iloc[idx]['name'],
-                    'similarity': float(similarities[idx]),
-                    'ingredients': data.iloc[idx].get('ingredient', ''),
-                    'method': data.iloc[idx].get('method', ''),
-                    'index': int(idx),
-                    'type': 'semantic',
-                    'search_mode': search_mode
-                })
-    
-    # Fallback to fuzzy search if results are poor or no model
-    if not results or (results and results[0]['similarity'] < 0.3) or model is None:
-        fuzzy_results = fuzzy_search_recipes(query, data, top_k, search_mode)
+    # --- AI Search / Semantic Search ---
+    if search_mode in ['อัตโนมัติ', 'AI Search เท่านั้น']:
+        if model is not None and SENTENCE_TRANSFORMERS_AVAILABLE and len(embeddings) > 0:
+            query_embedding = model.encode([query])
+            
+            if SKLEARN_AVAILABLE:
+                similarities = cosine_similarity(query_embedding, embeddings)[0]
+            else:
+                similarities = simple_cosine_similarity(query_embedding[0], embeddings)
+            
+            # Use UI-provided min_similarity if available, otherwise default thresholds
+            threshold = min_similarity if (min_similarity is not None) else 0.3
+            top_indices = np.argsort(-similarities)[:top_k * 2]
+
+            for idx in top_indices:
+                if idx < len(data) and similarities[idx] >= threshold:
+                    results.append({
+                        'name': data.iloc[idx]['name'],
+                        'similarity': float(similarities[idx]),
+                        'ingredients': data.iloc[idx].get('ingredient', ''),
+                        'method': data.iloc[idx].get('method', ''),
+                        'index': int(idx),
+                        'type': 'semantic'
+                    })
+
+    # --- Fuzzy Search ---
+    # Trigger fuzzy search if:
+    # 1. Mode is 'Fuzzy Search เท่านั้น'
+    # 2. Mode is 'อัตโนมัติ' AND AI search had no/poor results or AI is unavailable.
+    use_fuzzy = False
+    if search_mode == 'Fuzzy Search เท่านั้น':
+        use_fuzzy = True
+    elif search_mode == 'อัตโนมัติ':
+        fallback_threshold = min_similarity if (min_similarity is not None) else 0.4
+        if not results or (results and results[0]['similarity'] < fallback_threshold) or model is None:
+            use_fuzzy = True
+
+    if use_fuzzy:
+        fuzzy_results = fuzzy_search_recipes(query, data, top_k, min_similarity=min_similarity)
         
         if not results:
             results = fuzzy_results
@@ -198,32 +202,32 @@ def search_recipes(query: str, model, data, embeddings, ingredient_embeddings=No
                     unique_results.append(result)
                     seen_indices.add(result['index'])
             
-            # Sort by similarity and take top_k
-            results = sorted(unique_results, key=lambda x: x['similarity'], reverse=True)[:top_k]
-    
+            results = sorted(unique_results, key=lambda x: x['similarity'], reverse=True)
+
     return results[:top_k]
 
 
-def fuzzy_search_recipes(query: str, data, top_k: int = 5, search_mode: str = 'combined') -> List[Dict]:
-    """Fuzzy search with mode support"""
+def fuzzy_search_recipes(query: str, data, top_k: int = 5, min_similarity: float = None) -> List[Dict]:
+    """Fuzzy search based on name and content.
+    If min_similarity is provided, use it as the content matching threshold (0-1).
+    """
     results = []
     
     # Phase 1: Direct name matching
-    if search_mode in ['combined', 'name']:
-        food_names = data['name'].tolist()
-        close_matches = difflib.get_close_matches(query, food_names, n=top_k, cutoff=0.3)
-        
-        for match in close_matches:
-            idx = data[data['name'] == match].index[0]
-            similarity = difflib.SequenceMatcher(None, query.lower(), match.lower()).ratio()
-            results.append({
-                'name': match,
-                'similarity': similarity,
-                'ingredients': data.iloc[idx].get('ingredient', ''),
-                'method': data.iloc[idx].get('method', ''),
-                'index': idx,
-                'type': 'fuzzy'
-            })
+    food_names = data['name'].tolist()
+    close_matches = difflib.get_close_matches(query, food_names, n=top_k, cutoff=0.3)
+    
+    for match in close_matches:
+        idx = data[data['name'] == match].index[0]
+        similarity = difflib.SequenceMatcher(None, query.lower(), match.lower()).ratio()
+        results.append({
+            'name': match,
+            'similarity': similarity,
+            'ingredients': data.iloc[idx].get('ingredient', ''),
+            'method': data.iloc[idx].get('method', ''),
+            'index': idx,
+            'type': 'fuzzy'
+        })
     
     # Phase 2: Content matching
     if len(results) < top_k:
@@ -236,28 +240,17 @@ def fuzzy_search_recipes(query: str, data, top_k: int = 5, search_mode: str = 'c
             method = str(row.get('method', '')).lower()
             query_lower = query.lower()
             
-            # Calculate scores based on search_mode
-            if search_mode == 'ingredient':
-                # Focus only on ingredients
-                ingredient_words = ingredients.split()
-                ingredient_score = max([difflib.SequenceMatcher(None, query_lower, word).ratio() 
-                                       for word in ingredient_words] + [0])
-                max_score = ingredient_score
-                
-            elif search_mode == 'name':
-                # Focus only on name
-                name_score = difflib.SequenceMatcher(None, query_lower, name).ratio()
-                max_score = name_score
-                
-            else:  # combined
-                name_score = difflib.SequenceMatcher(None, query_lower, name).ratio()
-                ingredient_score = max([difflib.SequenceMatcher(None, query_lower, word).ratio() 
-                                       for word in ingredients.split()] + [0])
-                method_score = max([difflib.SequenceMatcher(None, query_lower, word).ratio() 
-                                   for word in method.split()] + [0])
-                max_score = max(name_score, ingredient_score, method_score)
+            name_score = difflib.SequenceMatcher(None, query_lower, name).ratio()
+            ingredient_words = ingredients.split()
+            ingredient_score = max([difflib.SequenceMatcher(None, query_lower, word).ratio() 
+                                   for word in ingredient_words] + [0]) if ingredient_words else 0
+            method_words = method.split()
+            method_score = max([difflib.SequenceMatcher(None, query_lower, word).ratio() 
+                               for word in method_words] + [0]) if method_words else 0
+            max_score = max(name_score, ingredient_score, method_score)
             
-            if max_score > 0.4:
+            threshold = min_similarity if (min_similarity is not None) else 0.4
+            if max_score > threshold:
                 results.append({
                     'name': row['name'],
                     'similarity': max_score,
