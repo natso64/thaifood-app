@@ -1,18 +1,13 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import os
 import re
-from typing import Dict
-from datetime import datetime
 
 from functions.data import load_food_data
 from functions.search import (
-    load_model, get_embeddings, get_ingredient_embeddings, search_recipes, SENTENCE_TRANSFORMERS_AVAILABLE, SKLEARN_AVAILABLE
+    get_name_embeddings, load_model, get_embeddings, get_ingredient_embeddings, search_recipes, SENTENCE_TRANSFORMERS_AVAILABLE, SKLEARN_AVAILABLE
 )
 from functions.nutrition import SimpleNutritionCalculator
 from functions.ui import display_ingredients, display_nutrition_card
-from functions.llm_search import generate_recipe_chat_response, analyze_query_with_phi3
 
 
 # ตั้งค่าหน้าเว็บ
@@ -54,7 +49,8 @@ def main():
             st.error("ไม่สามารถโหลดข้อมูลอาหารได้")
             return
         
-        embeddings = get_embeddings(model, data)
+        #embeddings = get_embeddings(model, data)
+        name_embeddings = get_name_embeddings(model, data)
         ingredient_embeddings = get_ingredient_embeddings(model, data)
         nutrition_calculator = SimpleNutritionCalculator()
     
@@ -123,7 +119,7 @@ def main():
                     effective_query,
                     model,
                     data,
-                    embeddings,
+                    name_embeddings,
                     ingredient_embeddings,
                     max_results,
                     min_similarity=sim_threshold
