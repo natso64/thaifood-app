@@ -1,19 +1,9 @@
-# Core requirements - ติดตั้งแน่นอน
-streamlit>=1.25.0
-pandas
-numpy
-requests
-
-# Text processing
-fuzzywuzzy>=0.18.0
-python-levenshtein
-
-# Visualization
-plotly
-
-# Optional AI packages - อาจติดตั้งไม่ได้แต่แอปจะทำงาน
-scikit-learn
-sentence-transformers
-
-# PyTorch CPU - สำหรับ AI features
-torch
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.3.0
+sentence-transformers>=2.2.0
+torch>=2.0.0
+plotly>=5.17.0
+pythainlp
+tqdm
