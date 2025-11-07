@@ -31,7 +31,7 @@ def calculate_nutrition(ingredient_text: str, nutrition_df: pd.DataFrame) -> Dic
         matches = nutrition_df[nutrition_df['ingredient_lower'] == ingredient_lower]
         
         if matches.empty:
-            matches = nutrition_df[nutrition_df['ingredient_lower'].str.contains(ingredient_lower, na=False, regex=False)]
+            matches = nutrition_df[nutrition_df['ingredient_lower'].str.contains(ingredient_lower, na=False)]
         
         if matches.empty:
             for idx, row in nutrition_df.iterrows():
