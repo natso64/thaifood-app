@@ -1,6 +1,6 @@
 # ==============================================================================
 # รวมโค้ด Streamlit App
-# เวอร์ชันปรับปรุง: วิธีทำมีขั้นตอน + หน่วยกรัม + Exact Match แยกส่วน
+# เวอร์ชันบังคับ: ใช้ sentence-transformers และ sklearn cosine_similarity เท่านั้น
 # ==============================================================================
 
 # --- (1) Imports ---
@@ -12,26 +12,13 @@ import pickle
 import numpy as np
 from typing import Dict, List, Any, Tuple
 
-# Imports จาก search.py / search_nomodel.py
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SentenceTransformer = None
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-
-try:
-    from sklearn.metrics.pairwise import cosine_similarity
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    cosine_similarity = None
-    TfidfVectorizer = None
-    SKLEARN_AVAILABLE = False
+# Imports สำหรับ AI/ML (Sentence Transformers และ Sklearn)
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # --- (2) ฝังเนื้อหา CSS และ HTML ---
 
-# เนื้อหาจาก templates/fonts.html
+# โหลด Google Fonts (Sarabun)
 FONTS_HTML = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
@@ -39,7 +26,7 @@ html, body, [class*="st-"] { font-family: 'Sarabun', sans-serif !important; }
 </style>
 """
 
-# เนื้อหาจาก templates/styles.css (ปรับปรุง)
+# CSS Stylesheet หลักสำหรับ App
 STYLES_CSS = """
 .main-header {
     background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
@@ -251,7 +238,7 @@ STYLES_CSS = """
 }
 """
 
-# --- (3) โค้ดจาก functions/data.py ---
+# --- (3) ฟังก์ชันโหลดและเตรียมข้อมูล ---
 
 RECIPES_PATH = "data/recipes.csv"
 INGREDIENTS_PATH = "data/ingredients.csv"
@@ -281,6 +268,7 @@ def load_and_preprocess_data():
 
     ingredients_df['ingredient_name'] = ingredients_df['ingredient_name'].fillna('').astype(str)
     
+    # รวมวัตถุดิบทั้งหมดของแต่ละ recipe_id ให้เป็น text ก้อนเดียว
     ingredient_text_grouped = ingredients_df.groupby('recipe_id')['ingredient_name'].apply(
         lambda x: ' '.join(x.unique())
     )
@@ -288,11 +276,11 @@ def load_and_preprocess_data():
     ingredient_text_df = ingredient_text_grouped.reset_index()
     ingredient_text_df.columns = ['recipe_id', 'ingredient_text']
 
+    # รวมตารางหลัก (recipes) เข้ากับตารางวัตถุดิบ (ingredient_text)
     main_df = pd.merge(recipes_df, ingredient_text_df, on='recipe_id', how='left')
     main_df['ingredient_text'] = main_df['ingredient_text'].fillna('')
     
     st.success("โหลดข้อมูลสำเร็จ")
-    ##st.success(f"โหลดข้อมูลสำเร็จ: {len(main_df)} สูตร, {len(ingredients_df)} รายการวัตถุดิบ")
     return main_df, ingredients_df
 
 @st.cache_data
@@ -308,6 +296,7 @@ def load_nutrition_data() -> (Dict[str, Any], List[str]):
             st.error("ไฟล์โภชนาการขาดคอลัมน์ที่จำเป็น")
             return {}, []
         
+        # แปลงเป็น dict (map) เพื่อให้ค้นหาข้อมูลโภชนาการได้เร็ว
         nutrition_map = {row['ingredient'].strip(): row for _, row in df.iterrows()}
         keys = list(nutrition_map.keys())
         keys.sort(key=len, reverse=True)
@@ -317,7 +306,8 @@ def load_nutrition_data() -> (Dict[str, Any], List[str]):
         st.error(f"ไม่สามารถโหลดไฟล์โภชนาการ: {e}")
         return {}, []
 
-# --- (4) โค้ดจาก functions/ui.py (ปรับปรุง) ---
+# --- (4) ฟังก์ชันแสดงผล UI (Widgets) ---
+
 def display_ingredients(recipe_id: int, ingredients_df: pd.DataFrame):
     """แสดงผลวัตถุดิบจาก DataFrame โดยจัดกลุ่มตาม component_group"""
     
@@ -379,6 +369,7 @@ def calculate_nutrition(
     found_ingredients = set()
 
     for _, row in recipe_ingredients.iterrows():
+        # ใช้ nutrition_name ถ้ามี, ถ้าไม่มี ใช้ ingredient_name
         match_key = row.get('nutrition_name')
         if pd.isna(match_key):
             match_key = row.get('ingredient_name')
@@ -387,6 +378,7 @@ def calculate_nutrition(
             
         match_key = str(match_key).strip()
 
+        # ตรวจสอบว่าวัตถุดิบนี้มีในฐานข้อมูลโภชนาการหรือไม่
         if match_key in nutrition_map:
             row_data = nutrition_map[match_key]
             
@@ -397,9 +389,7 @@ def calculate_nutrition(
 
     return totals, list(found_ingredients)
 
-# ==============================================================================
-# ฟังก์ชันที่เกี่ยวข้องกับการแสดงผลโภชนาการ (ปรับปรุง)
-# ==============================================================================
+# --- ฟังก์ชันคำนวณและแสดงผลโภชนาการ ---
 
 def calculate_nutrition_per_100g(
     totals: Dict[str, float],
@@ -407,13 +397,6 @@ def calculate_nutrition_per_100g(
 ) -> Dict[str, float]:
     """
     คำนวณโภชนาการต่อ 100 กรัม
-    
-    Args:
-        totals: ค่าโภชนาการรวมทั้งหมด
-        total_weight_grams: น้ำหนักรวมของเมนู (กรัม)
-    
-    Returns:
-        ค่าโภชนาการต่อ 100 กรัม
     """
     if total_weight_grams <= 0:
         return totals.copy()
@@ -501,7 +484,6 @@ def calculate_total_weight(
 ) -> float:
     """
     คำนวณน้ำหนักรวมของวัตถุดิบ (กรัม)
-    
     Returns:
         น้ำหนักรวม (กรัม) หรือ 500 ถ้าคำนวณไม่ได้
     """
@@ -559,48 +541,32 @@ def display_recipe_result(
     recipe_id = result['recipe_id']
     recipe_name = result['name']
     recipe_method = result.get('method', '')
-    similarity = result.get('similarity', 0)
-    result_type = result.get('type', 'N/A')
     
-    # แปลง type เป็นภาษาไทย
-    type_translation = {
-        'exact_name': 'ตรงชื่อเมนู 100%',
-        'exact_ingredients': 'ตรงวัตถุดิบทุกชนิด 100%',
-        'similar_name': 'คล้ายชื่อเมนู',
-        'similar_ingredient': 'คล้ายวัตถุดิบ'
-    }
-    type_display = type_translation.get(result_type, result_type)
     
     st.markdown(f"---")
     st.markdown(f"""
     <div class="recipe-card">
         <h3>{idx}. {recipe_name}</h3>
-        <!--<p><strong>ความคล้ายคลึง:</strong> {similarity:.0%} | <strong>ประเภท:</strong> {type_display}</p>-->
+        <p>(ความคล้าย: {result.get('similarity', 0)*100:.2f}%)</p>
     </div>
     """, unsafe_allow_html=True)
 
     # สร้าง 2 Tabs
     tab1, tab2 = st.tabs(["📋 วัตถุดิบและวิธีทำ", "📊 ข้อมูลโภชนาการ"])
     
-    # ========================================
     # Tab 1: วัตถุดิบและวิธีทำ
-    # ========================================
     with tab1:
         col1, col2 = st.columns([1, 1.2])
         
-        # Column 1: วัตถุดิบ
         with col1:
             st.markdown("### 🥘 วัตถุดิบ")
             display_ingredients(recipe_id, ingredients_data)
         
-        # Column 2: วิธีทำ
         with col2:
             st.markdown("### 🍳 วิธีทำ")
             display_method(recipe_method)
     
-    # ========================================
     # Tab 2: โภชนาการ
-    # ========================================
     with tab2:
         if (ingredients_data is not None 
             and not ingredients_data.empty 
@@ -636,7 +602,6 @@ def display_recipe_result(
                     gradient_colors=("#f093fb", "#f5576c")
                 )
             
-            
         else:
             st.info("ไม่สามารถคำนวณโภชนาการได้")
 
@@ -644,20 +609,19 @@ def display_recipe_result(
 def display_method(recipe_method: str):
     """
     แสดงวิธีทำและจัดการ 'หมายเหตุ' ได้อย่างถูกต้องและมีสไตล์
-    - "หัวข้อย่อย" -> บรรทัดลงท้ายด้วย ':' หรือขึ้นต้นด้วย '##'
-    - "หมายเหตุในขั้นตอน" -> **หมายเหตุ**... แสดงเป็น "หมายเหตุ(ตัวหนา) ข้อความ(ตัวเอียง)"
-    - "หมายเหตุส่วนท้าย" -> บรรทัดที่ขึ้นต้นด้วย 'หมายเหตุ:' จะถูกแยกไปแสดงในกล่อง info
     """
 
-    # ... (ส่วนของการแยกหมายเหตุท้ายเรื่องเหมือนเดิม ไม่ต้องแก้ไข) ...
     if not recipe_method or not recipe_method.strip():
         st.warning("ไม่พบข้อมูลวิธีทำ")
         return
+    
     full_text = recipe_method.strip()
     lines = [line.strip() for line in full_text.split('\n') if line.strip()]
     method_lines = []
     note_lines = []
     is_note_section = False
+    
+    # แยก "หมายเหตุ" ส่วนท้ายเรื่องออกมาก่อน
     note_pattern = r'^(?:หมายเหตุ|Note|Tip[s]?)\s*[:]?.*'
     for line in lines:
         is_step = re.match(r'^\d+\.\s*', line)
@@ -680,6 +644,7 @@ def display_method(recipe_method: str):
 
             for line in step_lines:
                 clean_line = re.sub(r'^\d+\.\s*', '', line).strip()
+                # หัวข้อย่อย คือ บรรทัดที่ลงท้ายด้วย : หรือขึ้นต้นด้วย ##
                 is_subheading = (line.endswith(':') or line.startswith('##')) and not re.match(r'^\d+\.\s*', line)
 
                 if is_subheading:
@@ -687,13 +652,12 @@ def display_method(recipe_method: str):
                     html_output += f'<div class="grid-subheading">{subheading_text}</div>'
                     step_counter = 1
                 
-                # --- ส่วนที่แก้ไข ---
+                # หมายเหตุ ที่แทรกในขั้นตอน
                 elif clean_line.startswith('**หมายเหตุ**'):
-                    # แทนที่ **หมายเหตุ** ด้วย <b>หมายเหตุ</b> (HTML tag for bold)
-                    # ข้อความที่เหลือจะยังอยู่ใน <i>...</i> (italic)
                     formatted_line = clean_line.replace('**หมายเหตุ**', '<b>หมายเหตุ</b>', 1)
                     html_output += f'<div class="grid-inline-note">📝 {formatted_line}</div>'
 
+                # ขั้นตอนปกติ
                 else:
                     description = re.sub(r'^\s*\d+\.\s*', '', line).strip()
                     html_output += f'<div>{step_counter}. {description}</div>'
@@ -705,88 +669,32 @@ def display_method(recipe_method: str):
         elif not extracted_note:
             st.info("ไม่พบขั้นตอนวิธีทำ")
 
-    # ... (ส่วนของการแสดงหมายเหตุท้ายเรื่องเหมือนเดิม ไม่ต้องแก้ไข) ...
+    # --- แสดง "หมายเหตุ" ส่วนท้ายเรื่อง (ถ้ามี) ---
     if extracted_note:
         header_pattern = r'(?:หมายเหตุ|Note|Tip[s]?)\s*[:]?\s*'
         note_body = re.sub(header_pattern, '', extracted_note, 1, flags=re.IGNORECASE).strip()
         st.info(f"📝 **หมายเหตุ:** **{note_body}**")
 
-# --- (5) โค้ดจาก functions/search_nomodel.py ---
-@st.cache_data
-def get_tfidf_embeddings_from_column(data, column_name):
-    if data.empty or column_name not in data.columns:
-        return np.array([])
-    
-    texts = data[column_name].fillna('').astype(str).tolist()
-    
-    if SKLEARN_AVAILABLE:
-        try:
-            vectorizer = TfidfVectorizer(max_features=1000)
-            embeddings = vectorizer.fit_transform(texts).toarray()
-            return embeddings
-        except Exception as e:
-            st.warning(f"TF-IDF error: {e}")
-            return create_simple_embeddings(texts)
-    else:
-        return create_simple_embeddings(texts)
+# --- (5) ฟังก์ชันการค้นหา (AI/ML) ---
 
-def create_simple_embeddings(texts):
-    if not texts:
-        return np.array([])
-    
-    all_chars = set("".join(texts))
-    common_chars = sorted(list(all_chars), key=texts.count, reverse=True)[:500]
-    char_to_idx = {char: idx for idx, char in enumerate(common_chars)}
-    
-    embeddings = []
-    for text in texts:
-        vec = np.zeros(len(char_to_idx))
-        for char in text:
-            if char in char_to_idx:
-                vec[char_to_idx[char]] += 1
-        norm = np.linalg.norm(vec)
-        if norm > 0:
-            vec = vec / norm
-        embeddings.append(vec)
-    
-    return np.array(embeddings)
-
-def simple_cosine_similarity(query_vec, embeddings):
-    similarities = []
-    query_norm = np.linalg.norm(query_vec)
-    
-    if query_norm == 0:
-        return np.zeros(len(embeddings))
-
-    for embedding in embeddings:
-        embedding_norm = np.linalg.norm(embedding)
-        if embedding_norm == 0:
-            similarities.append(0.0)
-        else:
-            dot_product = np.dot(query_vec, embedding)
-            similarity = dot_product / (query_norm * embedding_norm)
-            similarities.append(similarity)
-            
-    return np.array(similarities)
-
-# --- (6) โค้ดจาก functions/search.py (ปรับปรุงใหญ่) ---
 EMBEDDINGS_NAME_PATH = 'embeddings_name.pkl'
 EMBEDDINGS_INGREDIENT_PATH = 'embeddings_ingredient.pkl'
 MODEL_PATH = "model"
+# บังคับใช้โมเดลนี้เท่านั้น
 MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 
 @st.cache_resource
 def load_model():
-    if not SENTENCE_TRANSFORMERS_AVAILABLE:
-        st.warning("ไม่ได้ติดตั้ง SentenceTransformers, กำลังใช้ระบบค้นหาแบบ TF-IDF")
-        return None
+    """โหลดโมเดล SentenceTransformer (จาก local หรือ download)"""
     
+    # 1. พยายามโหลดจาก local (ถ้าเคยโหลดมาแล้ว)
     if os.path.exists(MODEL_PATH):
         try:
             return SentenceTransformer(MODEL_PATH)
         except Exception as e:
             st.warning(f"ไม่สามารถโหลดโมเดลจาก {MODEL_PATH}: {e}")
 
+    # 2. ถ้าโหลด local ไม่ได้ ให้ดาวน์โหลดจาก Hugging Face
     try:
         with st.spinner(f"กำลังดาวน์โหลดโมเดลการค้นหา..."):
             model = SentenceTransformer(MODEL_NAME)
@@ -799,9 +707,9 @@ def load_model():
 
 @st.cache_data
 def get_name_embeddings(_model, data):
-    if _model is None or not SENTENCE_TRANSFORMERS_AVAILABLE:
-        return get_tfidf_embeddings_from_column(data, 'recipe_name') 
+    """สร้างหรือโหลด Name Embeddings"""
     
+    # 1. พยายามโหลด embeddings ที่คำนวณไว้แล้วจากไฟล์ .pkl
     if os.path.exists(EMBEDDINGS_NAME_PATH):
         try:
             with open(EMBEDDINGS_NAME_PATH, 'rb') as f:
@@ -814,9 +722,12 @@ def get_name_embeddings(_model, data):
         
     texts = data['recipe_name'].fillna('').astype(str).tolist()
     
+    # 2. ถ้าไม่มีไฟล์ .pkl ให้สร้าง embeddings ใหม่
     with st.spinner("กำลังสร้างดัชนีการค้นหา (ชื่ออาหาร)..."):
-        embeddings = _model.encode(texts)
+        # _model.encode จะล้มเหลวหาก _model เป็น None (ซึ่งเป็นพฤติกรรมที่คาดหวัง)
+        embeddings = _model.encode(texts) 
     
+    # 3. บันทึกไฟล์ .pkl เพื่อใช้ครั้งถัดไป
     try:
         with open(EMBEDDINGS_NAME_PATH, 'wb') as f:
             pickle.dump(embeddings, f)
@@ -827,9 +738,9 @@ def get_name_embeddings(_model, data):
 
 @st.cache_data
 def get_ingredient_embeddings(_model, data):
-    if _model is None or not SENTENCE_TRANSFORMERS_AVAILABLE:
-        return get_tfidf_embeddings_from_column(data, 'ingredient_text')
+    """สร้างหรือโหลด Ingredient Embeddings"""
     
+    # 1. พยายามโหลด embeddings ที่คำนวณไว้แล้วจากไฟล์ .pkl
     if os.path.exists(EMBEDDINGS_INGREDIENT_PATH):
         try:
             with open(EMBEDDINGS_INGREDIENT_PATH, 'rb') as f:
@@ -842,9 +753,11 @@ def get_ingredient_embeddings(_model, data):
         
     texts = data['ingredient_text'].fillna('').astype(str).tolist()
     
+    # 2. ถ้าไม่มีไฟล์ .pkl ให้สร้าง embeddings ใหม่
     with st.spinner("กำลังสร้างดัชนีการค้นหา (ส่วนผสม)..."):
         embeddings = _model.encode(texts)
     
+    # 3. บันทึกไฟล์ .pkl เพื่อใช้ครั้งถัดไป
     try:
         with open(EMBEDDINGS_INGREDIENT_PATH, 'wb') as f:
             pickle.dump(embeddings, f)
@@ -863,20 +776,18 @@ def parse_search_query(query: str) -> Tuple[str, List[str]]:
     """
     query = query.strip()
     
-    # ตรวจสอบว่ามีจุลภาคหรือไม่
     if ',' in query:
-        # แยกด้วยจุลภาค
+        # ถ้ามีจุลภาค, ถือเป็นรายการวัตถุดิบ
         ingredients = [ing.strip() for ing in query.split(',') if ing.strip()]
         return "", ingredients
     
-    # ตรวจสอบว่ามีคำหลายคำหรือไม่ (อาจเป็นวัตถุดิบหลายชนิด)
     words = query.split()
     
-    # ถ้ามีมากกว่า 2 คำ ถือว่าเป็นการค้นหาวัตถุดิบ
+    # ถ้ามีมากกว่า 2 คำ, ถือเป็นรายการวัตถุดิบ (คั่นด้วย space)
     if len(words) > 2:
         return "", words
     
-    # ถ้าไม่เข้าเงื่อนไข ถือว่าเป็นชื่อเมนู
+    # ถ้าไม่เข้าเงื่อนไข, ถือว่าเป็นชื่อเมนู
     return query, []
 
 def search_recipes(
@@ -887,7 +798,7 @@ def search_recipes(
     name_embeddings: np.ndarray, 
     ingredient_embeddings: np.ndarray, 
     top_k=10, 
-    min_similarity=0.3
+    min_similarity=0.55
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     ค้นหาสูตรอาหาร คืนค่า 2 ลิสต์:
@@ -898,15 +809,15 @@ def search_recipes(
     if data.empty:
         return [], []
     
-    # แยก query
+    # 1. แยกคำค้นหา (อาจเป็นชื่อเมนู หรือ รายการวัตถุดิบ)
     menu_name, ingredient_list = parse_search_query(query)
     
     exact_matches: List[Dict[str, Any]] = []
     similar_matches: List[Dict[str, Any]] = []
     
-    # --- ค้นหาแบบ Exact Match 100% ---
+    # 2. ค้นหาแบบ Exact Match 100%
     if menu_name:
-        # ค้นหาชื่อเมนูที่ตรงกันทุกอย่าง (case-insensitive)
+        # 2.1 ค้นหาชื่อเมนูที่ตรงกัน (case-insensitive)
         exact_name_matches = data[
             data['recipe_name'].str.lower() == menu_name.lower()
         ]
@@ -917,18 +828,14 @@ def search_recipes(
                 'name': row['recipe_name'],
                 'similarity': 1.0,
                 'method': row.get('method', ''),
-                'note': row.get('note', ''),
-                'index': idx,
-                'type': 'exact_name'
+                'index': idx
             })
     
-    # --- ค้นหาแบบวัตถุดิบที่ตรงกันทุกชนิด ---
     if ingredient_list:
-        # หาเมนูที่มีวัตถุดิบครบทุกชนิด
+        # 2.2 ค้นหาเมนูที่มีวัตถุดิบครบทุกชนิด
         for idx, row in data.iterrows():
             ingredient_text = row.get('ingredient_text', '').lower()
             
-            # ตรวจสอบว่ามีวัตถุดิบครบทุกชนิดหรือไม่
             if all(ing.lower() in ingredient_text for ing in ingredient_list):
                 # ตรวจว่าเจอแล้วหรือยัง (ป้องกันซ้ำ)
                 if not any(m['recipe_id'] == row['recipe_id'] for m in exact_matches):
@@ -937,31 +844,17 @@ def search_recipes(
                         'name': row['recipe_name'],
                         'similarity': 1.0,
                         'method': row.get('method', ''),
-                        'note': row.get('note', ''),
-                        'index': idx,
-                        'type': 'exact_ingredients'
+                        'index': idx
                     })
     
-    # --- ค้นหาแบบคล้ายกัน (Semantic Search) ---
-    if model:
-        query_embedding = model.encode([query])
-    else:
-        query_vec = create_simple_embeddings([query])[0]
-        if query_vec.shape[0] != name_embeddings.shape[1]:
-            new_vec = np.zeros(name_embeddings.shape[1])
-            n = min(len(query_vec), len(new_vec))
-            new_vec[:n] = query_vec[:n]
-            query_embedding = [new_vec]
-        else:
-            query_embedding = [query_vec]
+    # 3. ค้นหาแบบคล้ายกัน (Semantic Search)
     
-    # ค้นหาจากชื่อ
+    # สร้าง embedding สำหรับคำค้นหา
+    query_embedding = model.encode([query])
+
+    # 3.1 ค้นหาจาก "ชื่อเมนู" ที่คล้ายกัน
     if len(name_embeddings) > 0:
-        if SKLEARN_AVAILABLE and model:
-            name_similarities = cosine_similarity(query_embedding, name_embeddings)[0]
-        else:
-            name_similarities = simple_cosine_similarity(query_embedding[0], name_embeddings)
-        
+        name_similarities = cosine_similarity(query_embedding, name_embeddings)[0]
         top_indices = np.argsort(-name_similarities)[:top_k * 2]
         
         exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
@@ -977,27 +870,13 @@ def search_recipes(
                         'name': data.iloc[idx]['recipe_name'],
                         'similarity': float(name_similarities[idx]),
                         'method': data.iloc[idx].get('method', ''),
-                        'note': data.iloc[idx].get('note', ''),
-                        'index': int(idx),
-                        'type': 'similar_name'
+                        'index': int(idx)
                     })
     
-    # ค้นหาจากวัตถุดิบ
+    # 3.2 ค้นหาจาก "วัตถุดิบ" ที่คล้ายกัน
     if len(ingredient_embeddings) > 0:
-        if not model and query_embedding[0].shape[0] != ingredient_embeddings.shape[1]:
-            query_vec_ing = create_simple_embeddings([query])[0]
-            new_vec = np.zeros(ingredient_embeddings.shape[1])
-            n = min(len(query_vec_ing), len(new_vec))
-            new_vec[:n] = query_vec_ing[:n]
-            query_embedding_ing = [new_vec]
-        else:
-            query_embedding_ing = query_embedding
-
-        if SKLEARN_AVAILABLE and model:
-            ingredient_similarities = cosine_similarity(query_embedding_ing, ingredient_embeddings)[0]
-        else:
-            ingredient_similarities = simple_cosine_similarity(query_embedding_ing[0], ingredient_embeddings)
-        
+        # (ใช้ query_embedding เดียวกันสำหรับค้นหาวัตถุดิบ)
+        ingredient_similarities = cosine_similarity(query_embedding, ingredient_embeddings)[0]
         top_indices = np.argsort(-ingredient_similarities)[:top_k * 2]
         
         exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
@@ -1007,24 +886,23 @@ def search_recipes(
             if idx < len(data) and ingredient_similarities[idx] >= min_similarity:
                 recipe_id = int(data.iloc[idx]['recipe_id'])
                 
+                # ข้ามถ้าเจอใน exact_matches หรือ similar_matches (จากชื่อ) แล้ว
                 if recipe_id not in exact_recipe_ids and recipe_id not in similar_recipe_ids:
                     similar_matches.append({
                         'recipe_id': recipe_id,
                         'name': data.iloc[idx]['recipe_name'],
                         'similarity': float(ingredient_similarities[idx]),
                         'method': data.iloc[idx].get('method', ''),
-                        'note': data.iloc[idx].get('note', ''),
-                        'index': int(idx),
-                        'type': 'similar_ingredient'
+                        'index': int(idx)
                     })
     
-    # เรียงลำดับ
+    # 4. เรียงลำดับและคืนค่า
     exact_matches = sorted(exact_matches, key=lambda x: x['similarity'], reverse=True)
     similar_matches = sorted(similar_matches, key=lambda x: x['similarity'], reverse=True)
     
     return exact_matches[:top_k], similar_matches[:top_k]
 
-# --- (7) โค้ดหลักจาก streamlit_app.py (ปรับปรุง) ---
+# --- (6) ส่วนหลักของ Streamlit App (Main) ---
 
 st.set_page_config(
     page_title="Thai Food Recommender",
@@ -1047,6 +925,9 @@ def main():
             st.error("ไม่สามารถโหลดข้อมูลอาหารได้")
             return
         
+        # หาก model โหลดไม่สำเร็จ (เป็น None)
+        # 2 บรรทัดนี้จะ raise Exception ซึ่งถูกต้องตามที่คาดหวัง
+        # เพราะเราบังคับให้ใช้โมเดลเท่านั้น
         name_embeddings = get_name_embeddings(model, data)
         ingredient_embeddings = get_ingredient_embeddings(model, data)
     
@@ -1059,6 +940,9 @@ def main():
     
     tab1, tab2 = st.tabs(["🔍 ค้นหาอาหาร", "📋 ข้อมูลทั้งหมด"])
     
+    # ========================================
+    # Tab 1: ค้นหา
+    # ========================================
     with tab1:
         st.markdown("## ค้นหาสูตรอาหาร")
         
@@ -1093,7 +977,7 @@ def main():
                     "ความคล้ายคลึงขั้นต่ำ (%) สำหรับส่วนคล้ายกัน",
                     0,
                     100,
-                    30,
+                    55,
                 )
 
             submitted = st.form_submit_button("ค้นหา")
@@ -1122,9 +1006,7 @@ def main():
             if total_results == 0:
                 st.warning("ไม่พบสูตรอาหารที่ตรงกับคำค้นหา")
             
-            # ========================================
-            # แสดงผลส่วนที่ตรงกัน 100%
-            # ========================================
+            # --- แสดงผลส่วนที่ตรงกัน 100% ---
             if exact_matches:
                 st.markdown(f"""
                 <div class="section-header">
@@ -1140,9 +1022,7 @@ def main():
                         nutrition_map
                     )
             
-            # ========================================
-            # แสดงผลส่วนที่คล้ายกัน
-            # ========================================
+            # --- แสดงผลส่วนที่คล้ายกัน ---
             if similar_matches:
                 st.markdown(f"""
                 <div class="section-header">
@@ -1161,6 +1041,9 @@ def main():
         elif submitted and not query_input:
             st.error("กรุณาป้อนคำค้นหา")
 
+    # ========================================
+    # Tab 2: ข้อมูลทั้งหมด
+    # ========================================
     with tab2:
         st.markdown("## 📋 ข้อมูลอาหารทั้งหมดในระบบ")
         
