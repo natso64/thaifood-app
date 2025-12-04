@@ -198,6 +198,11 @@ STYLES_CSS = """
     border-bottom: 1.5px solid #ccc;
     margin-top: 10px;
 }
+.grid-inline-note strong {
+    font-weight: bold;
+    color: #333;
+    margin-top: 10px;
+}
 
 .data-grid > div:last-child {
     border-bottom: none;
@@ -618,21 +623,12 @@ def display_method(recipe_method: str):
     full_text = recipe_method.strip()
     lines = [line.strip() for line in full_text.split('\n') if line.strip()]
     method_lines = []
-    note_lines = []
-    is_note_section = False
     
     # แยก "หมายเหตุ" ส่วนท้ายเรื่องออกมาก่อน
-    note_pattern = r'^(?:หมายเหตุ|Note|Tip[s]?)\s*[:]?.*'
     for line in lines:
-        is_step = re.match(r'^\d+\.\s*', line)
-        if not is_step and '**หมายเหตุ**' not in line and re.match(note_pattern, line, re.IGNORECASE):
-            is_note_section = True
-        if is_note_section:
-            note_lines.append(line)
-        else:
-            method_lines.append(line)
+        method_lines.append(line)
     method_steps_text = "\n".join(method_lines)
-    extracted_note = "\n".join(note_lines)
+    
 
     # --- สร้าง HTML สำหรับ "ขั้นตอนวิธีทำ" ---
     if method_steps_text:
@@ -643,19 +639,27 @@ def display_method(recipe_method: str):
             step_counter = 1
 
             for line in step_lines:
-                clean_line = re.sub(r'^\d+\.\s*', '', line).strip()
+                
                 # หัวข้อย่อย คือ บรรทัดที่ลงท้ายด้วย : หรือขึ้นต้นด้วย ##
                 is_subheading = (line.endswith(':') or line.startswith('##')) and not re.match(r'^\d+\.\s*', line)
+                is_subheading_note_inline = re.match(r'^\*\*(.+?)\*\* (.+)', line.strip())
+                is_subheading_note_step = re.match(r'^\*\*(.+?)\*\*$', line.strip())
 
                 if is_subheading:
                     subheading_text = line.replace('##', '').replace(':', '').strip()
                     html_output += f'<div class="grid-subheading">{subheading_text}</div>'
                     step_counter = 1
                 
+                elif is_subheading_note_inline:
+                    header_text = is_subheading_note_inline.group(1).strip()
+                    desc_text = is_subheading_note_inline.group(2).strip()
+                    html_output += f'<div class="grid-inline-note">📝 <strong>{header_text}</strong> <span>{desc_text}</span></div>'
+
                 # หมายเหตุ ที่แทรกในขั้นตอน
-                elif clean_line.startswith('**หมายเหตุ**'):
-                    formatted_line = clean_line.replace('**หมายเหตุ**', '<b>หมายเหตุ</b>', 1)
-                    html_output += f'<div class="grid-inline-note">📝 {formatted_line}</div>'
+                elif is_subheading_note_step:
+                    header_text = is_subheading_note_step.group(1).strip()
+                    html_output += f'<div class="grid-subheading">📝 {header_text}</div>'
+                    step_counter = 1
 
                 # ขั้นตอนปกติ
                 else:
@@ -666,14 +670,6 @@ def display_method(recipe_method: str):
             html_output += '</div>'
             st.markdown(html_output, unsafe_allow_html=True)
             
-        elif not extracted_note:
-            st.info("ไม่พบขั้นตอนวิธีทำ")
-
-    # --- แสดง "หมายเหตุ" ส่วนท้ายเรื่อง (ถ้ามี) ---
-    if extracted_note:
-        header_pattern = r'(?:หมายเหตุ|Note|Tip[s]?)\s*[:]?\s*'
-        note_body = re.sub(header_pattern, '', extracted_note, 1, flags=re.IGNORECASE).strip()
-        st.info(f"📝 **หมายเหตุ:** **{note_body}**")
 
 # --- (5) ฟังก์ชันการค้นหา (AI/ML) ---
 
