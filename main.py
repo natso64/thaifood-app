@@ -414,14 +414,14 @@ def calculate_nutrition_per_100g(
 
 def display_nutrition_card(
     totals: Dict[str, float], 
-    title: str = "โภชนาการทั้งหมด",
-    gradient_colors: tuple = ("#667eea", "#667eea")
+    title: str = "โภชนาการทั้งหมด ",
+    gradient_colors: tuple = ("#667eea", "#667eea"),
 ):
     """แสดงการ์ดโภชนาการ (ใช้ซ้ำได้) พร้อมหน่วยที่ถูกต้อง"""
     
-    if not totals or totals.get('calories', 0) == 0:
-        st.info("ไม่สามารถคำนวณโภชนาการได้")
-        return
+    # if not totals or totals.get('calories', 0) == 0:
+    #     st.info("ไม่สามารถคำนวณโภชนาการได้")
+    #     return
 
     st.markdown(f"""
     <div class="nutrition-card" style="background: linear-gradient(135deg, {gradient_colors[0]} 0%, {gradient_colors[1]} 100%);">
@@ -490,7 +490,7 @@ def calculate_total_weight(
     """
     คำนวณน้ำหนักรวมของวัตถุดิบ (กรัม)
     Returns:
-        น้ำหนักรวม (กรัม) หรือ 500 ถ้าคำนวณไม่ได้
+        น้ำหนักรวม (กรัม) 
     """
     if ingredients_df.empty:
         return 500.0
@@ -533,8 +533,9 @@ def calculate_total_weight(
                 continue
     
     # ถ้าคำนวณไม่ได้ ให้ใช้ค่าเริ่มต้น
-    return total_weight if total_weight > 0 else 500.0
+    return total_weight
 
+@st.fragment
 def display_recipe_result(
     idx: int,
     result: Dict[str, Any],
@@ -571,42 +572,39 @@ def display_recipe_result(
             st.markdown("### 🍳 วิธีทำ")
             display_method(recipe_method)
     
-    # Tab 2: โภชนาการ
+    
     with tab2:
-        if (ingredients_data is not None 
-            and not ingredients_data.empty 
-            and nutrition_map):
+        if ingredients_data is not None and not ingredients_data.empty and nutrition_map:
             
-            # คำนวณโภชนาการ
-            totals, found = calculate_nutrition(
-                recipe_id, 
-                ingredients_data, 
-                nutrition_map
-            )
-            
-            # คำนวณน้ำหนักรวม
+            # 1. คำนวณค่าที่จำเป็นเตรียมไว้ก่อน
+            totals, _ = calculate_nutrition(recipe_id, ingredients_data, nutrition_map)
             total_weight = calculate_total_weight(recipe_id, ingredients_data)
-            
-            # คำนวณโภชนาการต่อ 100g
             per_100g = calculate_nutrition_per_100g(totals, total_weight)
             
-            # แสดงผลแบบ 2 คอลัมน์
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                display_nutrition_card(
-                    totals, 
-                    title=f"📊 โภชนาการทั้งหมด",
-                    gradient_colors=("#667eea", "#764ba2")
-                )
-            
-            with col2:
-                display_nutrition_card(
-                    per_100g, 
-                    title="📊 โภชนาการต่อ 100 กรัม",
-                    gradient_colors=("#f093fb", "#f5576c")
-                )
-            
+            # 2. เริ่มเช็คเงื่อนไข total_weight
+            if total_weight > 100:
+                # สร้างสวิตช์ ถ้าเปิดจะได้ค่า True ถ้าปิดได้ค่า False
+                show_100g = st.toggle("แสดงโภชนาการต่อ 100 กรัม", key=f"toggle_{recipe_id}")
+
+                if show_100g:
+                     display_nutrition_card(per_100g, title="📊 โภชนาการต่อ 100 กรัม", gradient_colors=("#f093fb", "#f5576c"))
+                else:
+                     st.markdown(f"""
+    <div class="header-nutririon-card">
+        <h3>น้ำหนักรวม {total_weight} กรัม</h3>
+        
+    </div>
+    """, unsafe_allow_html=True)
+                     display_nutrition_card(totals, title="📊 โภชนาการทั้งหมด", gradient_colors=("#f093fb", "#f5576c"))
+            else:
+                st.markdown(f"""
+    <div class="header-nutririon-card">
+        <h3>น้ำหนักรวม {total_weight} กรัม</h3>
+        
+    </div>
+    """, unsafe_allow_html=True)
+                display_nutrition_card(totals, title="📊 โภชนาการทั้งหมด", gradient_colors=("#f093fb", "#f5576c"))
+
         else:
             st.info("ไม่สามารถคำนวณโภชนาการได้")
 
