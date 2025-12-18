@@ -1,9 +1,3 @@
-# ==============================================================================
-# รวมโค้ด Streamlit App
-# เวอร์ชันบังคับ: ใช้ sentence-transformers และ sklearn cosine_similarity เท่านั้น
-# ==============================================================================
-
-# --- (1) Imports ---
 import streamlit as st
 import pandas as pd
 import os
@@ -28,230 +22,183 @@ html, body, [class*="st-"] { font-family: 'Sarabun', sans-serif !important; }
 
 # CSS Stylesheet หลักสำหรับ App
 STYLES_CSS = """
-.main-header {
-    background: linear-gradient(90deg, #ff6b6b, #4ecdc4);
-    padding: 2rem;
-    border-radius: 15px;
-    color: white;
-    text-align: center;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-.recipe-card {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    padding: 1.5rem;
-    margin: 1rem 0;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-.recipe-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-}
-
-/* --- ส่วนหัวผลลัพธ์ --- */
-.section-header {
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    color: white;
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
-    margin: 1.5rem 0 1rem 0;
-    font-size: 1.3rem;
-    font-weight: 600;
-}
-
-/* --- สไตล์การแสดงวัตถุดิบ --- */
-.ingredient-group-header {
-    font-weight: 600;
-    color: #4ecdc4;
-    margin-top: 1rem;
-    margin-bottom: 0.5rem;
-    border-bottom: 2px solid #f0f0f0;
-    padding-bottom: 4px;
-}
-.ingredient-list {
-    background: #f8f9fa;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    border-radius: 5px;
-}
-.ingredient-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    border-bottom: 1px dashed #ddd;
-}
-.ingredient-item:last-child {
-    border-bottom: none;
-}
-.ingredient-name {
-    font-weight: 500;
-}
-.ingredient-quantity {
-    color: #555;
-    font-size: 0.95rem;
-    text-align: right;
-    white-space: nowrap;
-    padding-left: 1rem;
-}
-
-/* --- สไตล์โภชนาการ --- */
-.nutrition-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-    padding: 1.5rem;
-    color: white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-.nutrition-card h3 {
-    color: white;
-    margin-top: 0;
-    margin-bottom: 1rem;
-}
-.nutrition-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.8rem;
-}
-.nutrition-metric {
-    background: rgba(255,255,255,0.15);
-    backdrop-filter: blur(10px);
-    padding: 0.8rem;
-    border-radius: 8px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.2);
-}
-.nutrition-metric h5 {
-    color: #fff;
-    margin: 0;
-    font-size: 1.4rem;
-    font-weight: 700;
-}
-.nutrition-metric p {
-    margin: 0.3rem 0 0 0;
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.9);
-}
-
-/* --- สไตล์วิธีทำแบบใหม่ (มีขั้นตอน) --- */
-.method-grid {
-    display: grid;
-    grid-template-columns: auto 1fr; /* Column 1 for number, Column 2 for text */
-    gap: 0px 20px; /* No row gap, 20px column gap */
-    padding: 10px;
-    border-radius: 10px;
-    background-color: rgba(240, 242, 246, 0.7);
-    margin-bottom: 20px;
-}
-
-.method-step {
-    display: contents; /* Important for grid alignment */
-}
-
-.step-number {
-    font-weight: bold;
-    padding: 8px 0;
-    border-bottom: 1px solid #e0e0e0;
-    text-align: left;
-}
-
-.step-description {
-    padding: 8px 0;
-    border-bottom: 1px solid #e0e0e0;
-    text-align: left;
-}
-
+.main-header { background: linear-gradient(90deg, #ff6b6b, #4ecdc4); padding: 2rem; border-radius: 15px; color: white; text-align: center; margin-bottom: 2rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+.recipe-card { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 1.5rem; margin: 1rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; }
+.recipe-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+.section-header { background: linear-gradient(90deg, #667eea, #764ba2); color: white; padding: 1rem 1.5rem; border-radius: 8px; margin: 1.5rem 0 1rem 0; font-size: 1.3rem; font-weight: 600; }
+.ingredient-group-header { font-weight: 600; color: #4ecdc4; margin-top: 1rem; margin-bottom: 0.5rem; border-bottom: 2px solid #f0f0f0; padding-bottom: 4px; }
+.ingredient-list { background: #f8f9fa; padding: 1rem; margin: 0.5rem 0; border-radius: 5px; }
+.ingredient-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #ddd; }
+.ingredient-item:last-child { border-bottom: none; }
+.ingredient-name { font-weight: 500; }
+.ingredient-quantity { color: #555; font-size: 0.95rem; text-align: right; white-space: nowrap; padding-left: 1rem; }
+.nutrition-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 1.5rem; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.nutrition-card h3 { color: white; margin-top: 0; margin-bottom: 1rem; }
+.nutrition-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; }
+.nutrition-metric { background: rgba(255,255,255,0.15); backdrop-filter: blur(10px); padding: 0.8rem; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.2); }
+.nutrition-metric h5 { color: #fff; margin: 0; font-size: 1.4rem; font-weight: 700; }
+.nutrition-metric p { margin: 0.3rem 0 0 0; font-size: 0.85rem; color: rgba(255,255,255,0.9);}
+.method-grid { display: grid; grid-template-columns: auto 1fr; gap: 0px 20px; padding: 10px; border-radius: 10px; background-color: rgba(240, 242, 246, 0.7); margin-bottom: 20px; }
+.method-step { display: contents; }
+.step-number { font-weight: bold; padding: 8px 0; border-bottom: 1px solid #e0e0e0; text-align: left; }
+.step-description {padding: 8px 0;border-bottom: 1px solid #e0e0e0; text-align: left; }
 .method-step:last-child .step-number,
-.method-step:last-child .step-description {
-    border-bottom: none;
-}
-
-.method-subheading {
-    grid-column: 1 / -1; /* Make the subheading span across all columns */
-    font-weight: bold;
-    color: #4B4B4B; /* A slightly darker color for emphasis */
-    padding-top: 15px; /* Add space above the subheading */
-    padding-bottom: 5px; /* Add space below the subheading */
-    border-bottom: 2px solid #D0D0D0; /* A stronger border */
-    margin-bottom: 5px; /* Space before the first step of this group */
-}
-
-.data-grid {
-    display: block;
-    padding: 15px;
-    border-radius: 10px;
-    background-color: rgba(240, 242, 246, 0.8);
-    margin-bottom: 20px;
-}
-
-.data-grid > div {
-    padding: 8px 5px;
-    border-bottom: 1px solid #e0e0e0;
-    text-align: left;
-}
-
-.grid-subheading {
-    font-weight: bold;
-    color: #333;
-    border-bottom: 1.5px solid #ccc;
-    margin-top: 10px;
-}
-.grid-inline-note strong {
-    font-weight: bold;
-    color: #333;
-    margin-top: 10px;
-}
-
-.data-grid > div:last-child {
-    border-bottom: none;
-}
-
-.search-tips {
-    background-color: #e6f7ff;
-    border: 1px solid #b3e0ff;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 20px;
-}
+.method-step:last-child .step-description { border-bottom: none;}
+.method-subheading { grid-column: 1 / -1; font-weight: bold; color: #4B4B4B; padding-top: 15px; padding-bottom: 5px; border-bottom: 2px solid #D0D0D0; margin-bottom: 5px; }
+.data-grid { display: block; padding: 15px; border-radius: 10px; background-color: rgba(240, 242, 246, 0.8); margin-bottom: 20px; }
+.data-grid > div { padding: 8px 5px; border-bottom: 1px solid #e0e0e0; text-align: left; }
+.grid-subheading { font-weight: bold; color: #333; border-bottom: 1.5px solid #ccc; margin-top: 10px; }
+.grid-inline-note strong { font-weight: bold; color: #333; margin-top: 10px; }
+.data-grid > div:last-child { border-bottom: none; }
+.search-tips { background-color: #e6f7ff; border: 1px solid #b3e0ff; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
 .search-tips h4 { color: #0056b3; margin-top: 0; }
 .search-tips ul { padding-left: 20px; }
-
-/* --- สไตล์ Tabs --- */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-}
-
-.stTabs [data-baseweb="tab"] {
-    height: 50px;
-    background-color: #f0f2f6;
-    border-radius: 8px 8px 0 0;
-    padding: 0 24px;
-    font-weight: 600;
-}
-
-.stTabs [aria-selected="true"] {
-    background-color: #667eea;
-    color: white;
-}
-
-/* --- การ์ดโภชนาการแบบที่ 2  --- */
-.nutrition-card-pink {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    
-}
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] { height: 50px; background-color: #f0f2f6; border-radius: 8px 8px 0 0; padding: 0 24px; font-weight: 600; }
+.stTabs [aria-selected="true"] { background-color: #667eea; color: white; }
+.nutrition-card-pink { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
 """
 
-# --- (3) ฟังก์ชันโหลดและเตรียมข้อมูล ---
+UNIT_CONVERSION_GENERIC = {
+    'g': 1.0, 'gram': 1.0, 'grams': 1.0,
+    'kg': 1000.0,
+    'mg': 0.001,
+    'ml': 1.0, 'l': 1000.0, 'cc': 1.0,
+    'tbsp': 15.0,  # default, may be overridden by ingredient-specific
+    'tsp': 5.0,
+    'cup': 100.0,  # average cup -> 100 g (approx for mixed foods)
+    'piece': 30.0, # generic piece
+    'clove': 5.0,
+    'leaf': 2.0,
+    'slice': 10.0,
+    'bunch': 200.0
+}
 
+# ingredient-specific overrides for tbsp/cup/ml etc (grams per 1 tbsp / 1 cup etc)
+INGREDIENT_DENSITY_OVERRIDES = {
+    # tablespoons
+    'fish sauce': {'tbsp': 18.0},
+    'น้ำปลา': {'tbsp': 18.0},
+    'soy sauce': {'tbsp': 16.0},
+    'sugar': {'tbsp': 12.5},
+    'น้ำตาล': {'tbsp': 12.5},
+    'oil': {'tbsp': 13.6},
+    'น้ำมัน': {'tbsp': 13.6},
+    'lime juice': {'tbsp': 15.0},
+    'น้ำมะนาว': {'tbsp': 15.0},
+}
 RECIPES_PATH = "data/recipes.csv"
 INGREDIENTS_PATH = "data/ingredients.csv"
 NUTRITION_DATA_PATH = "data/thai_ingredients_nutrition.csv"
 
+# --------------------
+# Unit conversion / density table (improved)
+# Values are grams per unit
+# This table is intentionally conservative; extend as needed
+# --------------------
+UNIT_CONVERSION_GENERIC = {
+    'g': 1.0, 'gram': 1.0, 'grams': 1.0,
+    'kg': 1000.0,
+    'mg': 0.001,
+    'ml': 1.0, 'l': 1000.0, 'cc': 1.0,
+    'tbsp': 15.0,  # default, may be overridden by ingredient-specific
+    'tsp': 5.0,
+    'cup': 100.0,  # average cup -> 100 g (approx for mixed foods)
+    'piece': 30.0, # generic piece
+    'clove': 5.0,
+    'leaf': 2.0,
+    'slice': 10.0,
+    'bunch': 200.0
+}
+
+# ingredient-specific overrides for tbsp/cup/ml etc (grams per 1 tbsp / 1 cup etc)
+INGREDIENT_DENSITY_OVERRIDES = {
+    # tablespoons
+    'fish sauce': {'tbsp': 18.0},
+    'น้ำปลา': {'tbsp': 18.0},
+    'soy sauce': {'tbsp': 16.0},
+    'sugar': {'tbsp': 12.5},
+    'น้ำตาล': {'tbsp': 12.5},
+    'oil': {'tbsp': 13.6},
+    'น้ำมัน': {'tbsp': 13.6},
+    'lime juice': {'tbsp': 15.0},
+    'น้ำมะนาว': {'tbsp': 15.0},
+}
+
+# --------------------
+# Helper functions
+# --------------------
+
+def _normalize(text: Any) -> str:
+    if pd.isna(text):
+        return ''
+    return str(text).strip().lower()
+
+
+def convert_to_grams(amount: float, unit: str, ingredient_name: str) -> float:
+    """Convert any given amount+unit for an ingredient to grams (approximate but standardized).
+    - amount: numeric
+    - unit: e.g. 'g','tbsp','ช้อนโต๊ะ','ml','ถ้วย'
+    - ingredient_name: used to check overrides
+    """
+    if amount is None:
+        return 0.0
+    try:
+        amount = float(amount)
+    except Exception:
+        return 0.0
+
+    unit = _normalize(unit)
+    ing = _normalize(ingredient_name)
+
+    # map common thai unit words to english keys
+    unit_aliases = {
+        'กรัม': 'g', 'g': 'g', 'gram': 'g', 'grams': 'g', 'กก.': 'kg', 'kg': 'kg',
+        'มล.': 'ml', 'ml': 'ml', 'cc': 'ml', 'ลิตร': 'l', 'l': 'l',
+        'ช้อนโต๊ะ': 'tbsp', 'tablespoon': 'tbsp', 'tbsp': 'tbsp',
+        'ช้อนชา': 'tsp', 'teaspoon': 'tsp', 'tsp': 'tsp',
+        'ถ้วย': 'cup', 'cup': 'cup',
+        'ใบ': 'leaf', 'leaf': 'leaf',
+        'หัว': 'piece', 'ลูก': 'piece', 'piece': 'piece',
+        'กลีบ': 'clove', 'clove': 'clove',
+        'ชิ้น': 'slice', 'slice': 'slice'
+    }
+
+    if unit in unit_aliases:
+        unit_key = unit_aliases[unit]
+    else:
+        unit_key = unit
+
+    # If we have ingredient-specific override for this unit
+    if unit_key in ['tbsp', 'cup', 'tsp', 'ml']:
+        # check overrides by substring matching
+        for key, override in INGREDIENT_DENSITY_OVERRIDES.items():
+            if key in ing:
+                if unit_key in override:
+                    return amount * float(override[unit_key])
+        # else fall back to generic
+        val = UNIT_CONVERSION_GENERIC.get(unit_key, None)
+        if val is not None:
+            return amount * val
+
+    # generic mapping
+    val = UNIT_CONVERSION_GENERIC.get(unit_key)
+    if val is not None:
+        return amount * val
+
+    # unknown -> try to parse float-only units
+    try:
+        return amount
+    except Exception:
+        return 0.0
+
+
+# --------------------
+# Loading data functions
+# --------------------
+
 @st.cache_data
 def load_and_preprocess_data():
-    """โหลดข้อมูลจาก recipes.csv และ ingredients.csv"""
     if not os.path.exists(RECIPES_PATH) or not os.path.exists(INGREDIENTS_PATH):
         st.error(f"ไม่พบไฟล์ {RECIPES_PATH} หรือ {INGREDIENTS_PATH}")
         return pd.DataFrame(), pd.DataFrame()
@@ -263,55 +210,320 @@ def load_and_preprocess_data():
         st.error(f"ไม่สามารถอ่านไฟล์ CSV: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
+    # ensure expected columns
     if 'recipe_id' not in recipes_df.columns or 'recipe_name' not in recipes_df.columns:
-        st.error("ไฟล์ recipes.csv ต้องมีคอลัมน์ 'recipe_id' และ 'recipe_name'")
+        st.error("recipes.csv ต้องมี 'recipe_id' และ 'recipe_name'")
         return pd.DataFrame(), pd.DataFrame()
-        
+
     if 'recipe_id' not in ingredients_df.columns or 'ingredient_name' not in ingredients_df.columns:
-        st.error("ไฟล์ ingredients.csv ต้องมีคอลัมน์ 'recipe_id' และ 'ingredient_name'")
+        st.error("ingredients.csv ต้องมี 'recipe_id' และ 'ingredient_name'")
         return pd.DataFrame(), pd.DataFrame()
 
     ingredients_df['ingredient_name'] = ingredients_df['ingredient_name'].fillna('').astype(str)
-    
-    # รวมวัตถุดิบทั้งหมดของแต่ละ recipe_id ให้เป็น text ก้อนเดียว
-    ingredient_text_grouped = ingredients_df.groupby('recipe_id')['ingredient_name'].apply(
-        lambda x: ' '.join(x.unique())
-    )
-    
+    ingredients_df['unit'] = ingredients_df.get('unit', '').fillna('').astype(str)
+    # support multiple possible quantity column names
+    if 'quantity' in ingredients_df.columns:
+        ingredients_df['quantity'] = ingredients_df['quantity']
+    elif 'amount' in ingredients_df.columns:
+        ingredients_df['quantity'] = ingredients_df['amount']
+    elif 'ingredient_amount' in ingredients_df.columns:
+        ingredients_df['quantity'] = ingredients_df['ingredient_amount']
+    else:
+        # if no quantity, default to 0
+        ingredients_df['quantity'] = 0
+
+    # build search helper text
+    ingredient_text_grouped = ingredients_df.groupby('recipe_id')['ingredient_name'].apply(lambda x: ' '.join(x.unique()))
     ingredient_text_df = ingredient_text_grouped.reset_index()
     ingredient_text_df.columns = ['recipe_id', 'ingredient_text']
 
-    # รวมตารางหลัก (recipes) เข้ากับตารางวัตถุดิบ (ingredient_text)
     main_df = pd.merge(recipes_df, ingredient_text_df, on='recipe_id', how='left')
     main_df['ingredient_text'] = main_df['ingredient_text'].fillna('')
-    
+
     st.success("โหลดข้อมูลสำเร็จ")
     return main_df, ingredients_df
 
+
 @st.cache_data
-def load_nutrition_data() -> (Dict[str, Any], List[str]):
-    """โหลดข้อมูลโภชนาการจาก thai_ingredients_nutrition.csv"""
+def load_nutrition_data() -> Tuple[Dict[str, Any], List[str]]:
     if not os.path.exists(NUTRITION_DATA_PATH):
         st.warning(f"ไม่พบไฟล์ข้อมูลโภชนาการ: {NUTRITION_DATA_PATH}")
         return {}, []
-    
+
     try:
         df = pd.read_csv(NUTRITION_DATA_PATH)
-        if 'ingredient' not in df.columns or 'calories' not in df.columns:
-            st.error("ไฟล์โภชนาการขาดคอลัมน์ที่จำเป็น")
-            return {}, []
-        
-        # แปลงเป็น dict (map) เพื่อให้ค้นหาข้อมูลโภชนาการได้เร็ว
-        nutrition_map = {row['ingredient'].strip(): row for _, row in df.iterrows()}
-        keys = list(nutrition_map.keys())
-        keys.sort(key=len, reverse=True)
-        
-        return nutrition_map, keys
     except Exception as e:
-        st.error(f"ไม่สามารถโหลดไฟล์โภชนาการ: {e}")
+        st.error(f"ไม่สามารถอ่านไฟล์โภชนาการ: {e}")
         return {}, []
 
-# --- (4) ฟังก์ชันแสดงผล UI (Widgets) ---
+    # Expect the nutrition file to contain ingredient name + values per 100g
+    # Accept common column names (ingredient / ingredient_name)
+    possible_name_cols = [c for c in df.columns if c.lower() in ('ingredient','ingredient_name','name')]
+    if not possible_name_cols:
+        st.error('ไฟล์โภชนาการต้องมีคอลัมน์ชื่อวัตถุดิบ (ingredient)')
+        return {}, []
+
+    name_col = possible_name_cols[0]
+
+    # Standard nutrient keys to read (extendable)
+    standard_keys = {
+        'calories': ['calories','energy','kcal'],
+        'protein': ['protein','proteins'],
+        'carbs': ['carbs','carbohydrate','carbohydrates'],
+        'fat': ['fat','fats','lipid'],
+        'fiber': ['fiber','fibre','dietary_fiber'],
+        'vitamin_a': ['vitamin_a','vitamina'],
+        'vitamin_c': ['vitamin_c','vitaminc'],
+        'vitamin_b1': ['vitamin_b1','thiamin','b1'],
+        'vitamin_b2': ['vitamin_b2','riboflavin','b2'],
+        'calcium': ['calcium','ca'],
+        'iron': ['iron','fe'],
+        'potassium': ['potassium','k'],
+        'sodium': ['sodium','salt','na']
+    }
+
+    # Build a mapping from standard_keys to actual df columns
+    key_map = {}
+    lowercols = {c.lower(): c for c in df.columns}
+    for std, aliases in standard_keys.items():
+        found = None
+        for a in aliases:
+            if a in lowercols:
+                found = lowercols[a]
+                break
+        key_map[std] = found
+
+    # Build nutrition_map where values are floats per 100g
+    nutrition_map = {}
+    for _, row in df.iterrows():
+        ing = _normalize(row[name_col])
+        if ing == '':
+            continue
+        data = {}
+        for std_key, col in key_map.items():
+            if col is None:
+                data[std_key] = 0.0
+            else:
+                try:
+                    data[std_key] = float(row[col]) if not pd.isna(row[col]) else 0.0
+                except Exception:
+                    data[std_key] = 0.0
+        nutrition_map[ing] = data
+
+    keys = list(nutrition_map.keys())
+    keys.sort(key=len, reverse=True)
+    return nutrition_map, keys
+
+
+# --------------------
+# Nutrition calculation functions (standard)
+# --------------------
+
+def find_nutrition_entry(ingredient_name: str, nutrition_map: Dict[str, Any]) -> Tuple[str, Dict[str, float]]:
+    """Try to find a matching nutrition entry for an ingredient name.
+    Returns (matched_key, data) or (None, None)
+    Uses substring matching and exact matching.
+    """
+    if not ingredient_name:
+        return None, None
+    ing = _normalize(ingredient_name)
+
+    # exact match
+    if ing in nutrition_map:
+        return ing, nutrition_map[ing]
+
+    # substring match (longest key first helps)
+    for key in sorted(nutrition_map.keys(), key=len, reverse=True):
+        if key in ing or ing in key:
+            return key, nutrition_map[key]
+
+    return None, None
+
+
+def calculate_nutrition(recipe_id: int, ingredients_df: pd.DataFrame, nutrition_map: Dict[str, Any]) -> Tuple[Dict[str, float], List[str]]:
+    """Calculate total nutrition for a recipe by multiplying per-100g nutrition by grams used.
+    Returns totals and list of missing ingredients (not found in nutrition_map)
+    """
+    totals = {k: 0.0 for k in ['calories','protein','carbs','fat','fiber','vitamin_a','vitamin_c','vitamin_b1','vitamin_b2','calcium','iron','potassium','sodium']}
+    missing = []
+
+    recipe_ings = ingredients_df[ingredients_df['recipe_id'] == recipe_id]
+    if recipe_ings.empty:
+        return totals, []
+
+    for _, row in recipe_ings.iterrows():
+        ing_name = row.get('nutrition_name') if pd.notna(row.get('nutrition_name')) and row.get('nutrition_name') != '' else row.get('ingredient_name')
+        if pd.isna(ing_name) or not str(ing_name).strip():
+            continue
+        unit = row.get('unit', '')
+        quantity = row.get('quantity', 0)
+
+        grams = convert_to_grams(quantity, unit, ing_name)
+        if grams <= 0:
+            # skip if cannot determine grams
+            continue
+
+        matched_key, nut = find_nutrition_entry(ing_name, nutrition_map)
+        if matched_key is None:
+            missing.append(str(ing_name))
+            continue
+
+        # nut values are per 100g -> scale by grams/100
+        ratio = grams / 100.0
+        for k in totals.keys():
+            totals[k] += nut.get(k, 0.0) * ratio
+
+    return totals, list(set(missing))
+
+
+def calculate_total_weight(recipe_id: int, ingredients_df: pd.DataFrame) -> float:
+    recipe_ings = ingredients_df[ingredients_df['recipe_id'] == recipe_id]
+    if recipe_ings.empty:
+        return 0.0
+    total = 0.0
+    for _, row in recipe_ings.iterrows():
+        grams = convert_to_grams(row.get('quantity',0), row.get('unit',''), row.get('ingredient_name',''))
+        total += grams
+    return total
+
+
+def calculate_nutrition_per_100g(totals: Dict[str, float], total_weight_grams: float) -> Dict[str, float]:
+    if total_weight_grams <= 0:
+        return {k: 0.0 for k in totals.keys()}
+    return {k: (v / total_weight_grams) * 100.0 for k, v in totals.items()}
+
+
+
+
+# --------------------
+# Search / embeddings (kept from original)
+# --------------------
+EMBEDDINGS_NAME_PATH = 'embeddings_name.pkl'
+EMBEDDINGS_INGREDIENT_PATH = 'embeddings_ingredient.pkl'
+MODEL_PATH = 'model'
+MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+
+@st.cache_resource
+def load_model():
+    if os.path.exists(MODEL_PATH):
+        try:
+            return SentenceTransformer(MODEL_PATH)
+        except Exception:
+            pass
+    try:
+        model = SentenceTransformer(MODEL_NAME)
+        os.makedirs(MODEL_PATH, exist_ok=True)
+        model.save(MODEL_PATH)
+        return model
+    except Exception as e:
+        st.error(f"ไม่สามารถโหลดโมเดล: {e}")
+        return None
+
+@st.cache_data
+def get_name_embeddings(_model, data):
+    if os.path.exists(EMBEDDINGS_NAME_PATH):
+        try:
+            with open(EMBEDDINGS_NAME_PATH,'rb') as f:
+                return pickle.load(f)
+        except Exception:
+            pass
+    if data.empty:
+        return np.array([])
+    texts = data['recipe_name'].fillna('').astype(str).tolist()
+    embeddings = _model.encode(texts)
+    try:
+        with open(EMBEDDINGS_NAME_PATH,'wb') as f:
+            pickle.dump(embeddings,f)
+    except Exception:
+        pass
+    return embeddings
+
+@st.cache_data
+def get_ingredient_embeddings(_model, data):
+    if os.path.exists(EMBEDDINGS_INGREDIENT_PATH):
+        try:
+            with open(EMBEDDINGS_INGREDIENT_PATH,'rb') as f:
+                return pickle.load(f)
+        except Exception:
+            pass
+    if data.empty:
+        return np.array([])
+    texts = data['ingredient_text'].fillna('').astype(str).tolist()
+    embeddings = _model.encode(texts)
+    try:
+        with open(EMBEDDINGS_INGREDIENT_PATH,'wb') as f:
+            pickle.dump(embeddings,f)
+    except Exception:
+        pass
+    return embeddings
+
+
+def parse_search_query(query: str) -> Tuple[str, List[str]]:
+    query = query.strip()
+    if ',' in query:
+        ingredients = [ing.strip() for ing in query.split(',') if ing.strip()]
+        return '', ingredients
+    words = query.split()
+    if len(words) > 2:
+        return '', words
+    return query, []
+
+
+def search_recipes(query: str, data: pd.DataFrame, ingredients_df: pd.DataFrame, model: Any, name_embeddings: np.ndarray, ingredient_embeddings: np.ndarray, top_k=10, min_similarity=0.55):
+    if data.empty:
+        return [], []
+    menu_name, ingredient_list = parse_search_query(query)
+    exact_matches = []
+    similar_matches = []
+
+    if menu_name:
+        exact_name_matches = data[data['recipe_name'].str.lower() == menu_name.lower()]
+        for idx, row in exact_name_matches.iterrows():
+            exact_matches.append({'recipe_id': int(row['recipe_id']),'name': row['recipe_name'],'similarity':1.0,'method':row.get('method',''),'index':idx})
+    if ingredient_list:
+        for idx, row in data.iterrows():
+            ingredient_text = row.get('ingredient_text','').lower()
+            if all(ing.lower() in ingredient_text for ing in ingredient_list):
+                if not any(m['recipe_id']==row['recipe_id'] for m in exact_matches):
+                    exact_matches.append({'recipe_id': int(row['recipe_id']),'name': row['recipe_name'],'similarity':1.0,'method':row.get('method',''),'index':idx})
+
+    query_embedding = model.encode([query]) if model is not None else None
+    if query_embedding is not None and len(name_embeddings)>0:
+        name_similarities = cosine_similarity(query_embedding, name_embeddings)[0]
+        top_indices = np.argsort(-name_similarities)[:top_k*2]
+        exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
+        for idx in top_indices:
+            if idx < len(data) and name_similarities[idx] >= min_similarity:
+                recipe_id = int(data.iloc[idx]['recipe_id'])
+                if recipe_id not in exact_recipe_ids:
+                    similar_matches.append({'recipe_id': recipe_id,'name': data.iloc[idx]['recipe_name'],'similarity': float(name_similarities[idx]),'method': data.iloc[idx].get('method',''),'index': int(idx)})
+    if query_embedding is not None and len(ingredient_embeddings)>0:
+        ingredient_similarities = cosine_similarity(query_embedding, ingredient_embeddings)[0]
+        top_indices = np.argsort(-ingredient_similarities)[:top_k*2]
+        exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
+        similar_recipe_ids = {m['recipe_id'] for m in similar_matches}
+        for idx in top_indices:
+            if idx < len(data) and ingredient_similarities[idx] >= min_similarity:
+                recipe_id = int(data.iloc[idx]['recipe_id'])
+                if recipe_id not in exact_recipe_ids and recipe_id not in similar_recipe_ids:
+                    similar_matches.append({'recipe_id': recipe_id,'name': data.iloc[idx]['recipe_name'],'similarity': float(ingredient_similarities[idx]),'method': data.iloc[idx].get('method',''),'index': int(idx)})
+
+    exact_matches = sorted(exact_matches, key=lambda x: x['similarity'], reverse=True)
+    similar_matches = sorted(similar_matches, key=lambda x: x['similarity'], reverse=True)
+    return exact_matches[:top_k], similar_matches[:top_k]
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def display_ingredients(recipe_id: int, ingredients_df: pd.DataFrame):
     """แสดงผลวัตถุดิบจาก DataFrame โดยจัดกลุ่มตาม component_group"""
@@ -350,67 +562,7 @@ def display_ingredients(recipe_id: int, ingredients_df: pd.DataFrame):
 
     st.markdown(html_output, unsafe_allow_html=True)
 
-def calculate_nutrition(
-    recipe_id: int, 
-    ingredients_df: pd.DataFrame, 
-    nutrition_map: Dict[str, Any]
-) -> (Dict[str, float], List[str]):
-    """ประมาณการค่าโภชนาการจาก recipe_id (รองรับคอลัมน์เพิ่มเติม)"""
-    if ingredients_df.empty or not nutrition_map:
-        return {}, []
-    
-    recipe_ingredients = ingredients_df[ingredients_df['recipe_id'] == recipe_id]
-    
-    if recipe_ingredients.empty:
-        return {}, []
 
-    # คอลัมน์โภชนาการทั้งหมด
-    totals = {
-        'calories': 0, 'protein': 0, 'carbs': 0, 'fat': 0,
-        'fiber': 0, 'vitamin_a': 0, 'vitamin_c': 0,
-        'vitamin_b1': 0, 'vitamin_b2': 0,
-        'calcium': 0, 'iron': 0, 'potassium': 0, 'sodium': 0
-    }
-    found_ingredients = set()
-
-    for _, row in recipe_ingredients.iterrows():
-        # ใช้ nutrition_name ถ้ามี, ถ้าไม่มี ใช้ ingredient_name
-        match_key = row.get('nutrition_name')
-        if pd.isna(match_key):
-            match_key = row.get('ingredient_name')
-        if pd.isna(match_key):
-            continue
-            
-        match_key = str(match_key).strip()
-
-        # ตรวจสอบว่าวัตถุดิบนี้มีในฐานข้อมูลโภชนาการหรือไม่
-        if match_key in nutrition_map:
-            row_data = nutrition_map[match_key]
-            
-            for key in totals.keys():
-                totals[key] += row_data.get(key, 0)
-            
-            found_ingredients.add(match_key)
-
-    return totals, list(found_ingredients)
-
-# --- ฟังก์ชันคำนวณและแสดงผลโภชนาการ ---
-
-def calculate_nutrition_per_100g(
-    totals: Dict[str, float],
-    total_weight_grams: float = 500.0  # สมมติน้ำหนักเริ่มต้น 500g
-) -> Dict[str, float]:
-    """
-    คำนวณโภชนาการต่อ 100 กรัม
-    """
-    if total_weight_grams <= 0:
-        return totals.copy()
-    
-    per_100g = {}
-    for key, value in totals.items():
-        per_100g[key] = (value / total_weight_grams) * 100
-    
-    return per_100g
 
 def display_nutrition_card(
     totals: Dict[str, float], 
@@ -483,57 +635,7 @@ def display_nutrition_card(
     </div>
     """, unsafe_allow_html=True)
 
-def calculate_total_weight(
-    recipe_id: int,
-    ingredients_df: pd.DataFrame
-) -> float:
-    """
-    คำนวณน้ำหนักรวมของวัตถุดิบ (กรัม)
-    Returns:
-        น้ำหนักรวม (กรัม) 
-    """
-    if ingredients_df.empty:
-        return 500.0
-    
-    recipe_ingredients = ingredients_df[ingredients_df['recipe_id'] == recipe_id]
-    
-    if recipe_ingredients.empty:
-        return 500.0
-    
-    total_weight = 0.0
-    
-    for _, row in recipe_ingredients.iterrows():
-        quantity = row.get('quantity', 0)
-        unit = row.get('unit', '')
-        
-        if pd.notna(quantity) and pd.notna(unit):
-            try:
-                quantity = float(quantity)
-                unit = str(unit).lower().strip()
-                
-                # แปลงหน่วยเป็นกรัม
-                if unit in ['กรัม', 'g', 'gram', 'กก.']:
-                    if unit == 'กก.':
-                        total_weight += quantity * 1000
-                    else:
-                        total_weight += quantity
-                elif unit in ['มล.', 'ml', 'cc']:
-                    total_weight += quantity  # สมมติความหนาแน่น 1 g/ml
-                elif unit in ['ช้อนโต๊ะ', 'tablespoon', 'tbsp']:
-                    total_weight += quantity * 15  # 1 ช้อนโต๊ะ ≈ 15g
-                elif unit in ['ช้อนชา', 'teaspoon', 'tsp']:
-                    total_weight += quantity * 5   # 1 ช้อนชา ≈ 5g
-                elif unit in ['ถ้วย', 'cup']:
-                    total_weight += quantity * 240  # 1 ถ้วย ≈ 240g
-                elif unit in ['ใบ', 'leaf', 'กิ่ง']:
-                    total_weight += quantity * 2   # สมมติ 1 ใบ/กิ่ง ≈ 2g
-                elif unit in ['หัว', 'clove', 'ลูก']:
-                    total_weight += quantity * 10  # สมมติ 1 หัว ≈ 10g
-            except:
-                continue
-    
-    # ถ้าคำนวณไม่ได้ ให้ใช้ค่าเริ่มต้น
-    return total_weight
+
 
 @st.fragment
 def display_recipe_result(
@@ -669,232 +771,13 @@ def display_method(recipe_method: str):
             st.markdown(html_output, unsafe_allow_html=True)
             
 
-# --- (5) ฟังก์ชันการค้นหา (AI/ML) ---
 
-EMBEDDINGS_NAME_PATH = 'embeddings_name.pkl'
-EMBEDDINGS_INGREDIENT_PATH = 'embeddings_ingredient.pkl'
-MODEL_PATH = "model"
-# บังคับใช้โมเดลนี้เท่านั้น
-MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 
-@st.cache_resource
-def load_model():
-    """โหลดโมเดล SentenceTransformer (จาก local หรือ download)"""
-    
-    # 1. พยายามโหลดจาก local (ถ้าเคยโหลดมาแล้ว)
-    if os.path.exists(MODEL_PATH):
-        try:
-            return SentenceTransformer(MODEL_PATH)
-        except Exception as e:
-            st.warning(f"ไม่สามารถโหลดโมเดลจาก {MODEL_PATH}: {e}")
 
-    # 2. ถ้าโหลด local ไม่ได้ ให้ดาวน์โหลดจาก Hugging Face
-    try:
-        with st.spinner(f"กำลังดาวน์โหลดโมเดลการค้นหา..."):
-            model = SentenceTransformer(MODEL_NAME)
-            os.makedirs(MODEL_PATH, exist_ok=True)
-            model.save(MODEL_PATH)
-        return model
-    except Exception as e:
-        st.error(f"ไม่สามารถดาวน์โหลดโมเดล: {e}")
-        return None
 
-@st.cache_data
-def get_name_embeddings(_model, data):
-    """สร้างหรือโหลด Name Embeddings"""
-    
-    # 1. พยายามโหลด embeddings ที่คำนวณไว้แล้วจากไฟล์ .pkl
-    if os.path.exists(EMBEDDINGS_NAME_PATH):
-        try:
-            with open(EMBEDDINGS_NAME_PATH, 'rb') as f:
-                return pickle.load(f)
-        except Exception:
-            pass 
-    
-    if data.empty:
-        return np.array([])
-        
-    texts = data['recipe_name'].fillna('').astype(str).tolist()
-    
-    # 2. ถ้าไม่มีไฟล์ .pkl ให้สร้าง embeddings ใหม่
-    with st.spinner("กำลังสร้างดัชนีการค้นหา (ชื่ออาหาร)..."):
-        # _model.encode จะล้มเหลวหาก _model เป็น None (ซึ่งเป็นพฤติกรรมที่คาดหวัง)
-        embeddings = _model.encode(texts) 
-    
-    # 3. บันทึกไฟล์ .pkl เพื่อใช้ครั้งถัดไป
-    try:
-        with open(EMBEDDINGS_NAME_PATH, 'wb') as f:
-            pickle.dump(embeddings, f)
-    except Exception:
-        pass
-        
-    return embeddings
 
-@st.cache_data
-def get_ingredient_embeddings(_model, data):
-    """สร้างหรือโหลด Ingredient Embeddings"""
-    
-    # 1. พยายามโหลด embeddings ที่คำนวณไว้แล้วจากไฟล์ .pkl
-    if os.path.exists(EMBEDDINGS_INGREDIENT_PATH):
-        try:
-            with open(EMBEDDINGS_INGREDIENT_PATH, 'rb') as f:
-                return pickle.load(f)
-        except Exception:
-            pass
-    
-    if data.empty:
-        return np.array([])
-        
-    texts = data['ingredient_text'].fillna('').astype(str).tolist()
-    
-    # 2. ถ้าไม่มีไฟล์ .pkl ให้สร้าง embeddings ใหม่
-    with st.spinner("กำลังสร้างดัชนีการค้นหา (ส่วนผสม)..."):
-        embeddings = _model.encode(texts)
-    
-    # 3. บันทึกไฟล์ .pkl เพื่อใช้ครั้งถัดไป
-    try:
-        with open(EMBEDDINGS_INGREDIENT_PATH, 'wb') as f:
-            pickle.dump(embeddings, f)
-    except Exception:
-        pass
-        
-    return embeddings
 
-def parse_search_query(query: str) -> Tuple[str, List[str]]:
-    """
-    แยกคำค้นหาออกเป็น ชื่อเมนู และ วัตถุดิบ
-    รองรับรูปแบบ:
-    - "กะเพราหมูสับ" -> ชื่อเมนู
-    - "ใบมะกรูด เนื้อหมู ไก่" -> วัตถุดิบ (คั่นด้วยช่องว่าง)
-    - "ใบมะกรูด, เนื้อหมู, ไก่" -> วัตถุดิบ (คั่นด้วยจุลภาค)
-    """
-    query = query.strip()
-    
-    if ',' in query:
-        # ถ้ามีจุลภาค, ถือเป็นรายการวัตถุดิบ
-        ingredients = [ing.strip() for ing in query.split(',') if ing.strip()]
-        return "", ingredients
-    
-    words = query.split()
-    
-    # ถ้ามีมากกว่า 2 คำ, ถือเป็นรายการวัตถุดิบ (คั่นด้วย space)
-    if len(words) > 2:
-        return "", words
-    
-    # ถ้าไม่เข้าเงื่อนไข, ถือว่าเป็นชื่อเมนู
-    return query, []
 
-def search_recipes(
-    query: str, 
-    data: pd.DataFrame,
-    ingredients_df: pd.DataFrame,
-    model: Any, 
-    name_embeddings: np.ndarray, 
-    ingredient_embeddings: np.ndarray, 
-    top_k=10, 
-    min_similarity=0.55
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    ค้นหาสูตรอาหาร คืนค่า 2 ลิสต์:
-    1. exact_matches: ตรงกัน 100%
-    2. similar_matches: คล้ายกัน
-    """
-    
-    if data.empty:
-        return [], []
-    
-    # 1. แยกคำค้นหา (อาจเป็นชื่อเมนู หรือ รายการวัตถุดิบ)
-    menu_name, ingredient_list = parse_search_query(query)
-    
-    exact_matches: List[Dict[str, Any]] = []
-    similar_matches: List[Dict[str, Any]] = []
-    
-    # 2. ค้นหาแบบ Exact Match 100%
-    if menu_name:
-        # 2.1 ค้นหาชื่อเมนูที่ตรงกัน (case-insensitive)
-        exact_name_matches = data[
-            data['recipe_name'].str.lower() == menu_name.lower()
-        ]
-        
-        for idx, row in exact_name_matches.iterrows():
-            exact_matches.append({
-                'recipe_id': int(row['recipe_id']),
-                'name': row['recipe_name'],
-                'similarity': 1.0,
-                'method': row.get('method', ''),
-                'index': idx
-            })
-    
-    if ingredient_list:
-        # 2.2 ค้นหาเมนูที่มีวัตถุดิบครบทุกชนิด
-        for idx, row in data.iterrows():
-            ingredient_text = row.get('ingredient_text', '').lower()
-            
-            if all(ing.lower() in ingredient_text for ing in ingredient_list):
-                # ตรวจว่าเจอแล้วหรือยัง (ป้องกันซ้ำ)
-                if not any(m['recipe_id'] == row['recipe_id'] for m in exact_matches):
-                    exact_matches.append({
-                        'recipe_id': int(row['recipe_id']),
-                        'name': row['recipe_name'],
-                        'similarity': 1.0,
-                        'method': row.get('method', ''),
-                        'index': idx
-                    })
-    
-    # 3. ค้นหาแบบคล้ายกัน (Semantic Search)
-    
-    # สร้าง embedding สำหรับคำค้นหา
-    query_embedding = model.encode([query])
-
-    # 3.1 ค้นหาจาก "ชื่อเมนู" ที่คล้ายกัน
-    if len(name_embeddings) > 0:
-        name_similarities = cosine_similarity(query_embedding, name_embeddings)[0]
-        top_indices = np.argsort(-name_similarities)[:top_k * 2]
-        
-        exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
-        
-        for idx in top_indices:
-            if idx < len(data) and name_similarities[idx] >= min_similarity:
-                recipe_id = int(data.iloc[idx]['recipe_id'])
-                
-                # ข้ามถ้าเจอใน exact_matches แล้ว
-                if recipe_id not in exact_recipe_ids:
-                    similar_matches.append({
-                        'recipe_id': recipe_id,
-                        'name': data.iloc[idx]['recipe_name'],
-                        'similarity': float(name_similarities[idx]),
-                        'method': data.iloc[idx].get('method', ''),
-                        'index': int(idx)
-                    })
-    
-    # 3.2 ค้นหาจาก "วัตถุดิบ" ที่คล้ายกัน
-    if len(ingredient_embeddings) > 0:
-        # (ใช้ query_embedding เดียวกันสำหรับค้นหาวัตถุดิบ)
-        ingredient_similarities = cosine_similarity(query_embedding, ingredient_embeddings)[0]
-        top_indices = np.argsort(-ingredient_similarities)[:top_k * 2]
-        
-        exact_recipe_ids = {m['recipe_id'] for m in exact_matches}
-        similar_recipe_ids = {m['recipe_id'] for m in similar_matches}
-        
-        for idx in top_indices:
-            if idx < len(data) and ingredient_similarities[idx] >= min_similarity:
-                recipe_id = int(data.iloc[idx]['recipe_id'])
-                
-                # ข้ามถ้าเจอใน exact_matches หรือ similar_matches (จากชื่อ) แล้ว
-                if recipe_id not in exact_recipe_ids and recipe_id not in similar_recipe_ids:
-                    similar_matches.append({
-                        'recipe_id': recipe_id,
-                        'name': data.iloc[idx]['recipe_name'],
-                        'similarity': float(ingredient_similarities[idx]),
-                        'method': data.iloc[idx].get('method', ''),
-                        'index': int(idx)
-                    })
-    
-    # 4. เรียงลำดับและคืนค่า
-    exact_matches = sorted(exact_matches, key=lambda x: x['similarity'], reverse=True)
-    similar_matches = sorted(similar_matches, key=lambda x: x['similarity'], reverse=True)
-    
-    return exact_matches[:top_k], similar_matches[:top_k]
 
 # --- (6) ส่วนหลักของ Streamlit App (Main) ---
 
