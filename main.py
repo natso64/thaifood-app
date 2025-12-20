@@ -10,6 +10,8 @@ from typing import Dict, List, Any, Tuple
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from preprocess_data.ingredient.ingredient_map import PIECE_WEIGHT_MAP, SPECIFIC_DENSITY_MAP, VOLUME_WEIGHT_MAP
+
 # --- (2) ฝังเนื้อหา CSS และ HTML ---
 
 # โหลด Google Fonts (Sarabun)
@@ -59,75 +61,14 @@ STYLES_CSS = """
 .nutrition-card-pink { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
 """
 
-UNIT_CONVERSION_GENERIC = {
-    'g': 1.0, 'gram': 1.0, 'grams': 1.0,
-    'kg': 1000.0,
-    'mg': 0.001,
-    'ml': 1.0, 'l': 1000.0, 'cc': 1.0,
-    'tbsp': 15.0,  # default, may be overridden by ingredient-specific
-    'tsp': 5.0,
-    'cup': 100.0,  # average cup -> 100 g (approx for mixed foods)
-    'piece': 30.0, # generic piece
-    'clove': 5.0,
-    'leaf': 2.0,
-    'slice': 10.0,
-    'bunch': 200.0
-}
 
-# ingredient-specific overrides for tbsp/cup/ml etc (grams per 1 tbsp / 1 cup etc)
-INGREDIENT_DENSITY_OVERRIDES = {
-    # tablespoons
-    'fish sauce': {'tbsp': 18.0},
-    'น้ำปลา': {'tbsp': 18.0},
-    'soy sauce': {'tbsp': 16.0},
-    'sugar': {'tbsp': 12.5},
-    'น้ำตาล': {'tbsp': 12.5},
-    'oil': {'tbsp': 13.6},
-    'น้ำมัน': {'tbsp': 13.6},
-    'lime juice': {'tbsp': 15.0},
-    'น้ำมะนาว': {'tbsp': 15.0},
-}
+
 RECIPES_PATH = "data/recipes.csv"
 INGREDIENTS_PATH = "data/ingredients.csv"
 NUTRITION_DATA_PATH = "data/thai_ingredients_nutrition.csv"
 
-# --------------------
-# Unit conversion / density table (improved)
-# Values are grams per unit
-# This table is intentionally conservative; extend as needed
-# --------------------
-UNIT_CONVERSION_GENERIC = {
-    'g': 1.0, 'gram': 1.0, 'grams': 1.0,
-    'kg': 1000.0,
-    'mg': 0.001,
-    'ml': 1.0, 'l': 1000.0, 'cc': 1.0,
-    'tbsp': 15.0,  # default, may be overridden by ingredient-specific
-    'tsp': 5.0,
-    'cup': 100.0,  # average cup -> 100 g (approx for mixed foods)
-    'piece': 30.0, # generic piece
-    'clove': 5.0,
-    'leaf': 2.0,
-    'slice': 10.0,
-    'bunch': 200.0
-}
 
-# ingredient-specific overrides for tbsp/cup/ml etc (grams per 1 tbsp / 1 cup etc)
-INGREDIENT_DENSITY_OVERRIDES = {
-    # tablespoons
-    'fish sauce': {'tbsp': 18.0},
-    'น้ำปลา': {'tbsp': 18.0},
-    'soy sauce': {'tbsp': 16.0},
-    'sugar': {'tbsp': 12.5},
-    'น้ำตาล': {'tbsp': 12.5},
-    'oil': {'tbsp': 13.6},
-    'น้ำมัน': {'tbsp': 13.6},
-    'lime juice': {'tbsp': 15.0},
-    'น้ำมะนาว': {'tbsp': 15.0},
-}
 
-# --------------------
-# Helper functions
-# --------------------
 
 def _normalize(text: Any) -> str:
     if pd.isna(text):
@@ -135,62 +76,83 @@ def _normalize(text: Any) -> str:
     return str(text).strip().lower()
 
 
-def convert_to_grams(amount: float, unit: str, ingredient_name: str) -> float:
-    """Convert any given amount+unit for an ingredient to grams (approximate but standardized).
-    - amount: numeric
-    - unit: e.g. 'g','tbsp','ช้อนโต๊ะ','ml','ถ้วย'
-    - ingredient_name: used to check overrides
+def parse_quantity(qty_str):
     """
-    if amount is None:
+    แปลงข้อความปริมาณให้เป็นตัวเลขทศนิยม รองรับ:
+    - "1/2"   -> 0.5
+    - "1+1/2" -> 1.5
+    - "3/4"   -> 0.75
+    - "2"     -> 2.0
+    """
+    if pd.isna(qty_str) or qty_str == '':
         return 0.0
+        
+    qty_str = str(qty_str).strip()
+    
     try:
-        amount = float(amount)
-    except Exception:
+        # กรณี: 1+1/2 (จำนวนคละที่มีเครื่องหมาย +)
+        if '+' in qty_str:
+            parts = qty_str.split('+')
+            total = 0.0
+            for part in parts:
+                total += parse_quantity(part) # เรียกซ้ำเพื่อแปลงแต่ละส่วน
+            return total
+
+        # กรณี: 1/2 (เศษส่วน)
+        if '/' in qty_str:
+            numerator, denominator = qty_str.split('/')
+            return float(numerator) / float(denominator)
+
+        # กรณี: ตัวเลขปกติ
+        return float(qty_str)
+        
+    except (ValueError, ZeroDivisionError):
         return 0.0
 
-    unit = _normalize(unit)
-    ing = _normalize(ingredient_name)
-
-    # map common thai unit words to english keys
-    unit_aliases = {
-        'กรัม': 'g', 'g': 'g', 'gram': 'g', 'grams': 'g', 'กก.': 'kg', 'kg': 'kg',
-        'มล.': 'ml', 'ml': 'ml', 'cc': 'ml', 'ลิตร': 'l', 'l': 'l',
-        'ช้อนโต๊ะ': 'tbsp', 'tablespoon': 'tbsp', 'tbsp': 'tbsp',
-        'ช้อนชา': 'tsp', 'teaspoon': 'tsp', 'tsp': 'tsp',
-        'ถ้วย': 'cup', 'cup': 'cup',
-        'ใบ': 'leaf', 'leaf': 'leaf',
-        'หัว': 'piece', 'ลูก': 'piece', 'piece': 'piece',
-        'กลีบ': 'clove', 'clove': 'clove',
-        'ชิ้น': 'slice', 'slice': 'slice'
-    }
-
-    if unit in unit_aliases:
-        unit_key = unit_aliases[unit]
-    else:
-        unit_key = unit
-
-    # If we have ingredient-specific override for this unit
-    if unit_key in ['tbsp', 'cup', 'tsp', 'ml']:
-        # check overrides by substring matching
-        for key, override in INGREDIENT_DENSITY_OVERRIDES.items():
-            if key in ing:
-                if unit_key in override:
-                    return amount * float(override[unit_key])
-        # else fall back to generic
-        val = UNIT_CONVERSION_GENERIC.get(unit_key, None)
-        if val is not None:
-            return amount * val
-
-    # generic mapping
-    val = UNIT_CONVERSION_GENERIC.get(unit_key)
-    if val is not None:
-        return amount * val
-
-    # unknown -> try to parse float-only units
-    try:
+def get_gram_weight(ingredient_name, amount, unit):
+    """
+    แปลงปริมาณวัตถุดิบเป็นน้ำหนักกรัม โดยตรวจสอบตามลำดับความสำคัญ:
+    1. SPECIFIC_DENSITY_MAP (ความหนาแน่นเฉพาะของวัตถุดิบนั้น)
+    2. PIECE_WEIGHT_MAP (น้ำหนักต่อชิ้นของวัตถุดิบนั้น)
+    3. VOLUME_WEIGHT_MAP (หน่วยตวงทั่วไป)
+    """
+    amount = parse_quantity(amount)
+    if amount <= 0:
+        return 0.0
+    
+    # ทำความสะอาดข้อมูล (Trim spaces)
+    ing_name = ingredient_name.strip() if ingredient_name else ""
+    unit_name = unit.strip() if unit else ""
+    
+    # กรณีไม่มีหน่วย หรือหน่วยเป็นกรัมอยู่แล้ว
+    if not unit_name or unit_name in ['กรัม', 'g', 'gram']:
         return amount
-    except Exception:
-        return 0.0
+
+    # --- Priority 1: ตรวจสอบความหนาแน่นเฉพาะ (Specific Density) ---
+    # เช่น 'น้ำมัน' 1 'ถ้วย' จะหนักไม่เท่า 'แป้ง' 1 'ถ้วย'
+    if ing_name in SPECIFIC_DENSITY_MAP:
+        if unit_name in SPECIFIC_DENSITY_MAP[ing_name]:
+            factor = SPECIFIC_DENSITY_MAP[ing_name][unit_name]
+            return amount * factor
+
+    # --- Priority 2: ตรวจสอบน้ำหนักต่อชิ้น (Specific Piece) ---
+    # เช่น 'ไข่ไก่' 1 'ฟอง'
+    if ing_name in PIECE_WEIGHT_MAP:
+        if unit_name in PIECE_WEIGHT_MAP[ing_name]:
+            factor = PIECE_WEIGHT_MAP[ing_name][unit_name]
+            return amount * factor
+
+    # --- Priority 3: ตรวจสอบหน่วยวัดทั่วไป (Generic Volume/Weight) ---
+    # เช่น 1 'ช้อนโต๊ะ' (ตีเป็น 15g ถ้าไม่รู้วัตถุดิบ), 1 'กก.' -> 1000g
+    if unit_name in VOLUME_WEIGHT_MAP:
+        factor = VOLUME_WEIGHT_MAP[unit_name]
+        return amount * factor
+
+    # --- Fallback: ถ้าไม่เจออะไรเลย ---
+    # อาจจะ Return amount เดิม (สมมติว่าเป็นกรัม) หรือ Return None เพื่อแจ้งเตือน
+    # ในที่นี้ขอสมมติว่าเป็นกรัมไปก่อนเพื่อป้องกัน Error
+    print(f"Warning: ไม่พบหน่วยแปลงสำหรับ '{ing_name}' หน่วย '{unit_name}'. ใช้ค่าเดิม.")
+    return amount
 
 
 # --------------------
@@ -358,8 +320,8 @@ def calculate_nutrition(recipe_id: int, ingredients_df: pd.DataFrame, nutrition_
         unit = row.get('unit', '')
         quantity = row.get('quantity', 0)
 
-        grams = convert_to_grams(quantity, unit, ing_name)
-        if grams <= 0:
+        grams = get_gram_weight(ing_name, quantity, unit)
+        if pd.isna(grams) or grams <= 0:
             # skip if cannot determine grams
             continue
 
@@ -371,7 +333,10 @@ def calculate_nutrition(recipe_id: int, ingredients_df: pd.DataFrame, nutrition_
         # nut values are per 100g -> scale by grams/100
         ratio = grams / 100.0
         for k in totals.keys():
-            totals[k] += nut.get(k, 0.0) * ratio
+            val = nut.get(k, 0.0)
+            
+            if pd.notna(val):
+                totals[k] += float(val) * ratio
 
     return totals, list(set(missing))
 
@@ -382,8 +347,9 @@ def calculate_total_weight(recipe_id: int, ingredients_df: pd.DataFrame) -> floa
         return 0.0
     total = 0.0
     for _, row in recipe_ings.iterrows():
-        grams = convert_to_grams(row.get('quantity',0), row.get('unit',''), row.get('ingredient_name',''))
-        total += grams
+        grams = get_gram_weight(row.get('ingredient_name',''), row.get('quantity',0), row.get('unit',''))
+        if pd.notna(grams) and grams > 0:
+            total += grams
     return total
 
 
@@ -469,7 +435,15 @@ def parse_search_query(query: str) -> Tuple[str, List[str]]:
     return query, []
 
 
-def search_recipes(query: str, data: pd.DataFrame, ingredients_df: pd.DataFrame, model: Any, name_embeddings: np.ndarray, ingredient_embeddings: np.ndarray, top_k=10, min_similarity=0.55):
+def search_recipes(
+        query: str, 
+        data: pd.DataFrame, 
+        ingredients_df: pd.DataFrame, 
+        model: Any, 
+        name_embeddings: np.ndarray, 
+        ingredient_embeddings: np.ndarray, 
+        top_k=10, min_similarity=0.55
+        ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     if data.empty:
         return [], []
     menu_name, ingredient_list = parse_search_query(query)
@@ -510,19 +484,45 @@ def search_recipes(query: str, data: pd.DataFrame, ingredients_df: pd.DataFrame,
 
     exact_matches = sorted(exact_matches, key=lambda x: x['similarity'], reverse=True)
     similar_matches = sorted(similar_matches, key=lambda x: x['similarity'], reverse=True)
+
+    search_terms = []
+    if menu_name:
+        search_terms.append(menu_name.lower())
+    if ingredient_list:
+        search_terms.extend([term.lower() for term in ingredient_list])
+    
+    # ถ้าหาไม่เจอจาก parse_search_query (เช่น กรณีคำเดียว) ให้ split จาก query ตรงๆ
+    if not search_terms:
+        search_terms = query.lower().split()
+
+    # ฟังก์ชันนับจำนวนคำที่ตรง (Keyword Overlap Count)
+    def count_matches(recipe_str):
+        count = 0
+        target_text = str(recipe_str).lower()
+        for term in search_terms:
+            if term in target_text:
+                count += 1
+        return count
+
+    # คำนวณคะแนน Keyword Match ให้กับรายการใน similar_matches
+    for match in similar_matches:
+        # ดึง text รวม (ชื่อ + วัตถุดิบ) ของเมนูนั้นมาเช็ค
+        # (ต้องดึงจาก data เดิมโดยใช้ index หรือ recipe_id)
+        original_row = data.iloc[match['index']]
+        full_text = (str(original_row['recipe_name']) + " " + str(original_row['ingredient_text'])).lower()
+        
+        # นับว่าตรงกี่คำ
+        match['overlap_score'] = count_matches(full_text)
+
+    # 4. เรียงลำดับใหม่ (Re-ranking)
+    # เรียงตาม overlap_score (มากไปน้อย) ก่อน -> แล้วค่อยตาม similarity (มากไปน้อย)
+    similar_matches = sorted(
+        similar_matches, 
+        key=lambda x: (x['overlap_score'], x['similarity']), 
+        reverse=True
+    )
+
     return exact_matches[:top_k], similar_matches[:top_k]
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def display_ingredients(recipe_id: int, ingredients_df: pd.DataFrame):
@@ -571,10 +571,6 @@ def display_nutrition_card(
 ):
     """แสดงการ์ดโภชนาการ (ใช้ซ้ำได้) พร้อมหน่วยที่ถูกต้อง"""
     
-    # if not totals or totals.get('calories', 0) == 0:
-    #     st.info("ไม่สามารถคำนวณโภชนาการได้")
-    #     return
-
     st.markdown(f"""
     <div class="nutrition-card" style="background: linear-gradient(135deg, {gradient_colors[0]} 0%, {gradient_colors[1]} 100%);">
         <h3>{title}</h3>
@@ -684,7 +680,7 @@ def display_recipe_result(
             per_100g = calculate_nutrition_per_100g(totals, total_weight)
             
             # 2. เริ่มเช็คเงื่อนไข total_weight
-            if total_weight > 100:
+            if total_weight > 200:
                 # สร้างสวิตช์ ถ้าเปิดจะได้ค่า True ถ้าปิดได้ค่า False
                 show_100g = st.toggle("แสดงโภชนาการต่อ 100 กรัม", key=f"toggle_{recipe_id}")
 
@@ -692,19 +688,19 @@ def display_recipe_result(
                      display_nutrition_card(per_100g, title="📊 โภชนาการต่อ 100 กรัม", gradient_colors=("#f093fb", "#f5576c"))
                 else:
                      st.markdown(f"""
-    <div class="header-nutririon-card">
-        <h3>น้ำหนักรวม {total_weight} กรัม</h3>
-        
-    </div>
-    """, unsafe_allow_html=True)
+                                <div class="header-nutririon-card">
+                                    <h3>น้ำหนักรวม {total_weight} กรัม</h3>
+                                    
+                                </div>
+                                """, unsafe_allow_html=True)
                      display_nutrition_card(totals, title="📊 โภชนาการทั้งหมด", gradient_colors=("#f093fb", "#f5576c"))
             else:
                 st.markdown(f"""
-    <div class="header-nutririon-card">
-        <h3>น้ำหนักรวม {total_weight} กรัม</h3>
-        
-    </div>
-    """, unsafe_allow_html=True)
+                            <div class="header-nutririon-card">
+                                <h3>น้ำหนักรวม {total_weight} กรัม</h3>
+                                
+                            </div>
+                            """, unsafe_allow_html=True)
                 display_nutrition_card(totals, title="📊 โภชนาการทั้งหมด", gradient_colors=("#f093fb", "#f5576c"))
 
         else:
@@ -770,11 +766,6 @@ def display_method(recipe_method: str):
             html_output += '</div>'
             st.markdown(html_output, unsafe_allow_html=True)
             
-
-
-
-
-
 
 
 

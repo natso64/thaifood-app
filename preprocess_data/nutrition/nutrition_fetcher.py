@@ -2,6 +2,8 @@ import pandas as pd
 import requests
 import time
 
+from nutrition.nutrition_map import USDA_MAP
+
 # ==========================================
 # 1. ตั้งค่า API และ Mapping (ส่วนสำคัญ)
 # ==========================================

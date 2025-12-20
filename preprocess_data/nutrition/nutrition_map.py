@@ -30,6 +30,7 @@ USDA_MAP = {
     'ไส้กรอกหมูแห้ง': 'Sausage, Chinese, pork',
 
     'เนื้อโค': 'Beef, flank, separable lean and fat, trimmed to 0" fat, all grades, raw',
+    'เนื้อโคหรือเนื้อไก่': 'Beef, flank, separable lean and fat, trimmed to 0" fat, all grades, raw',
     'เนื้อวัว': 'Beef, flank, separable lean and fat, trimmed to 0" fat, all grades, raw',
     'เนื้อวัวสับละเอียด': 'Beef, ground, 80% lean meat / 20% fat, raw',
     'เนื้อเค็มต้ม': 'Beef, cured, corned beef, brisket, raw',
