@@ -226,22 +226,22 @@ def load_nutrition_data() -> Tuple[Dict[str, Any], List[str]]:
         return {}, []
 
     name_col = possible_name_cols[0]
-
     # Standard nutrient keys to read (extendable)
+
     standard_keys = {
-        'calories': ['calories','energy','kcal'],
-        'protein': ['protein','proteins'],
-        'carbs': ['carbs','carbohydrate','carbohydrates'],
-        'fat': ['fat','fats','lipid'],
-        'fiber': ['fiber','fibre','dietary_fiber'],
-        'vitamin_a': ['vitamin_a','vitamina'],
-        'vitamin_c': ['vitamin_c','vitaminc'],
-        'vitamin_b1': ['vitamin_b1','thiamin','b1'],
-        'vitamin_b2': ['vitamin_b2','riboflavin','b2'],
-        'calcium': ['calcium','ca'],
-        'iron': ['iron','fe'],
-        'potassium': ['potassium','k'],
-        'sodium': ['sodium','salt','na']
+        'calories': ['calories'],
+        'protein': ['protein'],
+        'carbs': ['carbs'],
+        'fat': ['fat'],
+        'fiber': ['fiber'],
+        'vitamin_a': ['vitamin_a'],
+        'vitamin_c': ['vitamin_c'],
+        'vitamin_b1': ['vitamin_b1'],
+        'vitamin_b2': ['vitamin_b2'],
+        'calcium': ['calcium'],
+        'iron': ['iron'],
+        'potassium': ['potassium'],
+        'sodium': ['sodium']
     }
 
     # Build a mapping from standard_keys to actual df columns
