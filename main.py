@@ -651,7 +651,7 @@ def display_recipe_result(
     st.markdown(f"""
     <div class="recipe-card">
         <h3>{idx}. {recipe_name}</h3>
-        <p>(ความคล้าย: {result.get('similarity', 0)*100:.2f}%)</p>
+        # <p>(ความคล้าย: {result.get('similarity', 0)*100:.2f}%)</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -802,7 +802,7 @@ def main():
     st.markdown(f"""
     <div class="main-header">
         <h1>🍲 ระบบแนะนำรายการอาหารไทย</h1>
-        <p>Thai Food Recommendation System</p>
+        <p>Thai Food Recommendation System</p>f
     </div>
     """, unsafe_allow_html=True)
     
